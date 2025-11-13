@@ -1,0 +1,22 @@
+﻿# Ignore Visual Studio temporary files
+.vs/
+*.user
+*.suo
+
+# Build artifacts
+bin/
+obj/
+Debug/
+Release/
+
+# NuGet
+*.nupkg
+packages/
+
+# Rider
+.idea/
+
+# Logs
+*.log
+*.tmp
+*.cache
