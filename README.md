@@ -1,5 +1,5 @@
 # Tradesoft
-A robust backtesting tool for evaluating trading strategies on (*financial assets to define*)
+A robust backtesting tool for evaluating trading strategies on financial assets
 
 ## Project Overview
 
@@ -18,7 +18,7 @@ Developed by Master 2 IT for Finance students, this tool combines academic rigor
 - .NET 9.0
 - API: (actif a definir )
 
-## Created by :
+## Contributing
 - Martin MÉNOT
 - Louis GESLIN
 - Inès MAKINDE
