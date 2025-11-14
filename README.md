@@ -18,7 +18,7 @@ Developed by Master 2 IT for Finance students, this tool combines academic rigor
 - .NET 9.0
 - API: (actif a definir )
 
-# Created by :
+## Created by :
 - Martin MÉNOT
 - Louis GESLIN
 - Inès MAKINDE
