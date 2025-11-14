@@ -1,7 +1,7 @@
 # Tradesoft
 A robust backtesting tool for evaluating trading strategies on (*financial assets to define*)
 
-## Aperçu du Projet
+## Project Overview
 
 This project implements a comprehensive backtesting system that allows traders and analysts to evaluate the potential performance of trading strategies applied to historical financial asset data.
 
