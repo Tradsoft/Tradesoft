@@ -16,7 +16,6 @@ Developed by Master 2 IT for Finance students, this tool combines academic rigor
 - C# 13.0
 - WPF
 - .NET 9.0
-- API: (actif a definir )
 
 ## Contributing
 - Martin MÉNOT
