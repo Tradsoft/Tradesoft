@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TradeSoft.Engine\TradeSoft.Engine.csproj" />
+    <ProjectReference Include="..\TradeSoft.Infrastructure\TradeSoft.Infrastructure.csproj" />
+    <ProjectReference Include="..\TradeSoft.Core\TradeSoft.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>
