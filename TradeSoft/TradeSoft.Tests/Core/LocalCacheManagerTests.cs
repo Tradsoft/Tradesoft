@@ -34,7 +34,7 @@ public class LocalCacheManagerTests
     }
 
     [Fact]
-    public async Task EnsureAsync_FileMissing_ShouldDownload_AndCreateFinalFile() // Si fichier absent, le télécharger 
+    public async Task EnsureAsync_FileMissing_ShouldDownload_AndCreateFinalFile() // Si fichier absent, le télécharger et créer le fichier final
     {
         using var temp = new TempDir();
         var content = Encoding.UTF8.GetBytes("downloaded");
