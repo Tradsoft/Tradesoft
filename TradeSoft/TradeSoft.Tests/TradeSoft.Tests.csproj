@@ -10,6 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Engine\**" />
+    <Compile Remove="Infrastructure\**" />
+    <EmbeddedResource Remove="Engine\**" />
+    <EmbeddedResource Remove="Infrastructure\**" />
+    <None Remove="Engine\**" />
+    <None Remove="Infrastructure\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="FluentAssertions" Version="8.8.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
@@ -24,11 +33,6 @@
   <ItemGroup>
     <ProjectReference Include="..\TradeSoft.Core\TradeSoft.Core.csproj" />
     <ProjectReference Include="..\TradeSoft.Engine\TradeSoft.Engine.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Infrastructure\" />
-    <Folder Include="Engine\" />
   </ItemGroup>
 
 </Project>
