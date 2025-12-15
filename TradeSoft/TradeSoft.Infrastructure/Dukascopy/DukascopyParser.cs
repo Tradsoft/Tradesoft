@@ -2,15 +2,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using TradeSoft.Core.Entities;
+using TradeSoft.Core.MarketData.Entities;
 
 namespace TradeSoft.Infrastructure.Dukascopy
 {
     public static class DukascopyParser
     {
-        public static List<MarketQuote> Parse(byte[] compressedBytes, DateTime hourStart, string symbol)
+        public static List<TickData> Parse(byte[] compressedBytes, DateTime hourStart, string symbol)
         {
-            var quotes = new List<MarketQuote>();
+            var quotes = new List<TickData>();
 
             if (compressedBytes == null || compressedBytes.Length < 13)
                 return quotes; // Fichier vide ou trop petit
@@ -38,7 +38,7 @@ namespace TradeSoft.Infrastructure.Dukascopy
 
                         decimal pointValue = 100000m;
 
-                        var quote = new MarketQuote
+                        var quote = new TickData
                         {
                             Symbol = symbol,
                             Timestamp = hourStart.AddMilliseconds(timeOffset),

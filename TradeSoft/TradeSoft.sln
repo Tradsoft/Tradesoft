@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.0.11222.15 d18.0
+VisualStudioVersion = 18.0.11222.15
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradeSoft.Core", "TradeSoft.Core\TradeSoft.Core.csproj", "{E3CB9C07-C462-4FBA-AE54-FCFE5FA2668E}"
 EndProject
@@ -11,11 +11,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradeSoft.Infrastructure", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradeSoft.UI", "TradeSoft.UI\TradeSoft.UI.csproj", "{C52D1C5C-04AA-4A61-B7B8-FD8FB04367C6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradeSoft.DataImporter", "TradeSoft.ETL\TradeSoft.DataImporter.csproj", "{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradeSoft.Tests", "TradeSoft.Tests\TradeSoft.Tests.csproj", "{0AE1BD4D-DB11-408D-913F-92BDD377FBC6}"
-EndProject
-Project("{00D1A9C2-B5F0-4AF3-8072-F6C62B433612}") = "TradeSoft.Database", "TradeSoft.Database\TradeSoft.Database.sqlproj", "{BC8B127E-D8D0-47FC-9463-5B244A9079CF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -75,18 +71,6 @@ Global
 		{C52D1C5C-04AA-4A61-B7B8-FD8FB04367C6}.Release|x64.Build.0 = Release|Any CPU
 		{C52D1C5C-04AA-4A61-B7B8-FD8FB04367C6}.Release|x86.ActiveCfg = Release|Any CPU
 		{C52D1C5C-04AA-4A61-B7B8-FD8FB04367C6}.Release|x86.Build.0 = Release|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Debug|x64.Build.0 = Debug|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Debug|x86.Build.0 = Debug|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Release|x64.ActiveCfg = Release|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Release|x64.Build.0 = Release|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Release|x86.ActiveCfg = Release|Any CPU
-		{C654E4AD-121C-44AB-9C9A-F6EE0BF60FFD}.Release|x86.Build.0 = Release|Any CPU
 		{0AE1BD4D-DB11-408D-913F-92BDD377FBC6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0AE1BD4D-DB11-408D-913F-92BDD377FBC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0AE1BD4D-DB11-408D-913F-92BDD377FBC6}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -99,24 +83,6 @@ Global
 		{0AE1BD4D-DB11-408D-913F-92BDD377FBC6}.Release|x64.Build.0 = Release|Any CPU
 		{0AE1BD4D-DB11-408D-913F-92BDD377FBC6}.Release|x86.ActiveCfg = Release|Any CPU
 		{0AE1BD4D-DB11-408D-913F-92BDD377FBC6}.Release|x86.Build.0 = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|x64.Build.0 = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|x64.Deploy.0 = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|x86.Build.0 = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Debug|x86.Deploy.0 = Debug|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|Any CPU.Deploy.0 = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|x64.ActiveCfg = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|x64.Build.0 = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|x64.Deploy.0 = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|x86.ActiveCfg = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|x86.Build.0 = Release|Any CPU
-		{BC8B127E-D8D0-47FC-9463-5B244A9079CF}.Release|x86.Deploy.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
