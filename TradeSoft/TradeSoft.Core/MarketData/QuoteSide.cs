@@ -1,4 +1,4 @@
-﻿namespace TradeSoft.Core.MarketData.Enums;
+﻿namespace TradeSoft.Core.MarketData;
 
 public enum QuoteSide : byte
 {

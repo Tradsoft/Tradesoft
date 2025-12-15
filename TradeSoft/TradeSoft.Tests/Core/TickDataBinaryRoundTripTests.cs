@@ -2,8 +2,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using TradeSoft.Core.MarketData;
-using TradeSoft.Core.MarketData.Entities;
-using TradeSoft.Core.MarketData.Enums;
 using Xunit;
 
 public class TickDataBinaryRoundtripTests

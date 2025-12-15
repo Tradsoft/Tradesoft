@@ -1,7 +1,6 @@
 ﻿using System.Runtime.InteropServices;
-using TradeSoft.Core.MarketData.Enums;
 
-namespace TradeSoft.Core.MarketData.Entities;
+namespace TradeSoft.Core.MarketData;
 
 /// <summary>
 /// Contrat binaire : 33 bytes (Pack=1).

@@ -1,7 +1,6 @@
 ﻿using FluentAssertions;
 using System.Runtime.InteropServices;
 using TradeSoft.Core.MarketData;
-using TradeSoft.Core.MarketData.Entities;
 using Xunit;
 
 public class TickDataTests
