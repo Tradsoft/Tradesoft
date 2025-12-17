@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TradeSoft.Core\TradeSoft.Core.csproj" />
+    <ProjectReference Include="..\TradeSoft.Infrastructure\TradeSoft.Infrastructure.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
