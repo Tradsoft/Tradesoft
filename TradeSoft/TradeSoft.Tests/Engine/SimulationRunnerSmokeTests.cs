@@ -3,6 +3,7 @@ using TradeSoft.Core.Events;
 using TradeSoft.Core.MarketData;
 using TradeSoft.Core.Trading;
 using TradeSoft.Engine.Simulation;
+using Xunit;
 
 namespace TradeSoft.Tests.Engine;
 
@@ -11,11 +12,14 @@ public class SimulationRunnerSmokeTests
     [Fact]
     public void PipelineStartsPublishesAndStops()
     {
+        var broker = new NoOpBroker();
+
         var runner = new SimulationRunner(
             DisruptorConfig.Default,
-            new NoOpStrategy(),
-            new NoOpRiskManager(),
-            new NoOpBroker());
+            strategy: new NoOpStrategy(),
+            riskManager: new NoOpRiskManager(),
+            matchingEngine: new NoOPMatchingEngine(),
+            broker: broker);
 
         runner.Start();
 
@@ -26,26 +30,34 @@ public class SimulationRunnerSmokeTests
         runner.Stop();
 
         runner.IsRunning.Should().BeFalse();
+
+        broker.ExecutionReportsReceived.Should().Be(1);
     }
 
     private sealed class NoOpStrategy : IStrategy
     {
-        public void OnMarketEvent(MarketEvent marketEvent)
-        {
-        }
+        public void OnMarketEvent(MarketEvent marketEvent) { }
     }
 
     private sealed class NoOpRiskManager : IRiskManager
     {
-        public void Validate(MarketEvent marketEvent)
-        {
-        }
+        public void Validate(MarketEvent marketEvent) { }
+    }
+
+    private sealed class NoOPMatchingEngine : IMatchingEngine
+    {
+        public ExecutionReport Execute(OrderCommand command, TickData? tick)
+            => new ExecutionReport(command.CommandId, ExecutionStatus.Rejected, 0m, null, "NoOp");
     }
 
     private sealed class NoOpBroker : IBroker
     {
-        public void OnOrder(MarketEvent marketEvent)
+        public int ExecutionReportsReceived { get; private set; }
+
+        public void OnExecutionReport(MarketEvent marketEvent)
         {
+            if (marketEvent.ExecutionReport is null) return;
+            ExecutionReportsReceived++;
         }
     }
 }

@@ -7,9 +7,6 @@ public sealed class CleanupEventHandler : IEventHandler<MarketEvent>
 {
     public void OnEvent(MarketEvent data, long sequence, bool endOfBatch)
     {
-        if (endOfBatch)
-        {
-            data.Reset();
-        }
+        data.Reset();
     }
 }

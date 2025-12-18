@@ -15,6 +15,8 @@ public sealed class StrategyEventHandler : IEventHandler<MarketEvent>
 
     public void OnEvent(MarketEvent data, long sequence, bool endOfBatch)
     {
+        if(data.Tick is null)
+            return;
         _strategy?.OnMarketEvent(data);
     }
 }

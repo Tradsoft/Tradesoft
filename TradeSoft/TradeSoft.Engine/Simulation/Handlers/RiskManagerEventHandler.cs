@@ -14,7 +14,18 @@ public sealed class RiskManagerEventHandler : IEventHandler<MarketEvent>
     }
 
     public void OnEvent(MarketEvent data, long sequence, bool endOfBatch)
-    {
+    {   
+        if(data.Order is null)
+            return;
         _riskManager?.Validate(data);
+
+        try
+        {
+            _riskManager?.Validate(data);
+        }
+        catch (Exception ex)
+        {
+            data.Reject($"RiskManager validation failed: {ex.GetType().Name}");
+        }
     }
 }
