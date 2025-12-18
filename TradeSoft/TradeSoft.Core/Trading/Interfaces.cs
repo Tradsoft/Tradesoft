@@ -1,4 +1,5 @@
 ﻿using TradeSoft.Core.Events;
+using TradeSoft.Core.MarketData;
 
 namespace TradeSoft.Core.Trading;
 
@@ -14,5 +15,10 @@ public interface IRiskManager
 
 public interface IBroker
 {
-    void OnOrder(MarketEvent marketEvent);
+    void OnExecutionReport(MarketEvent marketEvent);
+}
+
+public interface IMatchingEngine
+{
+    ExecutionReport Execute(OrderCommand command, TickData? tick);
 }

@@ -117,11 +117,11 @@ public class LocalCacheManagerTests
         for (int i = 0; i < tasks.Length; i++)
             tasks[i] = cache.EnsureAsync(rf, CancellationToken.None);
 
-        await Task.WhenAll(tasks);
+        var results = await Task.WhenAll(tasks);
 
         Assert.Equal(1, store.DownloadCalls);
-        foreach (var t in tasks)
-            Assert.True(File.Exists(t.Result));
+        foreach (var path in results)
+            Assert.True(File.Exists(path));
     }
 
     // -------- Helpers --------

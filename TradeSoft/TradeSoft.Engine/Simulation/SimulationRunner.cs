@@ -12,6 +12,7 @@ public sealed class SimulationRunner
     private readonly DisruptorConfig _config;
     private readonly IStrategy? _strategy;
     private readonly IRiskManager? _riskManager;
+    private readonly IMatchingEngine? _matchingEngine;
     private readonly IBroker? _broker;
 
     private Disruptor<MarketEvent>? _disruptor;
@@ -22,12 +23,14 @@ public sealed class SimulationRunner
         DisruptorConfig config,
         IStrategy? strategy = null,
         IRiskManager? riskManager = null,
-        IBroker? broker = null)
+        IBroker? broker = null,
+        IMatchingEngine? matchingEngine = null)
     {
         _config = config;
         _strategy = strategy;
         _riskManager = riskManager;
         _broker = broker;
+        _matchingEngine = matchingEngine;
     }
 
     public bool IsRunning => _disruptor is not null;
@@ -50,10 +53,12 @@ public sealed class SimulationRunner
             _config.WaitStrategy);
 
         _disruptor
-            .HandleEventsWith(new RiskManagerEventHandler(_riskManager))
-            .Then(new StrategyEventHandler(_strategy))
-            .Then(new BrokerEventHandler(_broker))
-            .Then(new CleanupEventHandler());
+        .HandleEventsWith(new StrategyEventHandler(_strategy))
+        .Then(new RiskManagerEventHandler(_riskManager))
+        .Then(new MatchingEventHandler(_matchingEngine))
+        .Then(new BrokerEventHandler(_broker))
+        .Then(new CleanupEventHandler());
+
 
         _ringBuffer = _disruptor.Start();
     }
@@ -82,12 +87,19 @@ public sealed class SimulationRunner
 
     public void PublishOrder(OrderCommand orderCommand)
     {
-        Publish(evt => evt.SetOrder(orderCommand));
+        Publish(evt => {
+            evt.Reset();
+            evt.AttachOrder(orderCommand);
+        });
     }
 
     public void PublishExecutionReport(ExecutionReport executionReport)
     {
-        Publish(evt => evt.SetExecutionReport(executionReport));
+        Publish(evt =>
+        {
+            evt.Reset();
+            evt.AttachExecutionReport(executionReport);
+        });
     }
 
     private void Publish(Action<MarketEvent> composer)
