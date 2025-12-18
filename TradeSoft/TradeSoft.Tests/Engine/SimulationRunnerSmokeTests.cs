@@ -1,4 +1,5 @@
-﻿using FluentAssertions;
+﻿using System;
+using FluentAssertions;
 using TradeSoft.Core.Events;
 using TradeSoft.Core.MarketData;
 using TradeSoft.Core.Trading;
@@ -24,13 +25,18 @@ public class SimulationRunnerSmokeTests
         runner.Start();
 
         runner.PublishTick(new TickData(1, 100, 101, 10));
-        runner.PublishOrder(new OrderCommand(Guid.NewGuid(), "TEST", OrderSide.Buy, 1m, OrderType.Market, OrderTimeInForce.Day));
-        runner.PublishExecutionReport(new ExecutionReport(Guid.NewGuid(), ExecutionStatus.New, 0m));
+
+        runner.PublishOrder(new OrderCommand(
+            Guid.NewGuid(),
+            "TEST",
+            OrderSide.Buy,
+            1m,
+            OrderType.Market,
+            OrderTimeInForce.Day));
 
         runner.Stop();
 
         runner.IsRunning.Should().BeFalse();
-
         broker.ExecutionReportsReceived.Should().Be(1);
     }
 

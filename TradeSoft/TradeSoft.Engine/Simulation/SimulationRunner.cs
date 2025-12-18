@@ -74,7 +74,7 @@ public sealed class SimulationRunner
         _disruptor.Shutdown();
         _disruptor = null;
         _ringBuffer = null;
-        _cancellationSource?.Dispose();
+        _cancellationSource.Dispose();
         _cancellationSource = null;
     }
 
@@ -87,12 +87,19 @@ public sealed class SimulationRunner
 
     public void PublishOrder(OrderCommand orderCommand)
     {
-        Publish(evt => evt.AttachOrder(orderCommand));
+        Publish(evt => {
+            evt.Reset();
+            evt.AttachOrder(orderCommand);
+        });
     }
 
     public void PublishExecutionReport(ExecutionReport executionReport)
     {
-        Publish(evt => evt.AttachExecutionReport(executionReport));
+        Publish(evt =>
+        {
+            evt.Reset();
+            evt.AttachExecutionReport(executionReport);
+        });
     }
 
     private void Publish(Action<MarketEvent> composer)

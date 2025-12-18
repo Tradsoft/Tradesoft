@@ -8,20 +8,19 @@ public sealed class RiskManagerEventHandler : IEventHandler<MarketEvent>
 {
     private readonly IRiskManager? _riskManager;
 
-    public RiskManagerEventHandler(IRiskManager? riskManager)
-    {
-        _riskManager = riskManager;
-    }
+    public RiskManagerEventHandler(IRiskManager? riskManager) => _riskManager = riskManager;
 
     public void OnEvent(MarketEvent data, long sequence, bool endOfBatch)
-    {   
-        if(data.Order is null)
-            return;
-        _riskManager?.Validate(data);
+    {
+        if (_riskManager is null) return;
+
+        if (data.Order is null) return;
+
+        if (data.ExecutionReport is not null) return;
 
         try
         {
-            _riskManager?.Validate(data);
+            _riskManager.Validate(data);
         }
         catch (Exception ex)
         {
