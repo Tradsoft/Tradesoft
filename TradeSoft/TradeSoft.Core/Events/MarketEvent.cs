@@ -13,6 +13,8 @@ public sealed class MarketEvent
     public OrderCommand? Order { get; private set; }
     public ExecutionReport? ExecutionReport { get; private set; }
 
+
+    public bool IsRejected { get; set; }
     public void SetTick(in TickData tick)
     {
         Reset();
@@ -20,18 +22,31 @@ public sealed class MarketEvent
         Tick = tick;
     }
 
-    public void SetOrder(OrderCommand orderCommand)
+    public void AttachOrder(OrderCommand orderCommand)
     {
-        Reset();
-        Type = MarketEventType.OrderCommand;
         Order = orderCommand;
+        Type = MarketEventType.OrderCommand;
     }
 
-    public void SetExecutionReport(ExecutionReport executionReport)
+    public void AttachExecutionReport(ExecutionReport executionReport)
     {
-        Reset();
-        Type = MarketEventType.ExecutionReport;
         ExecutionReport = executionReport;
+        Type = MarketEventType.ExecutionReport;
+    }
+
+    public void Reject(string? message = null)
+    {
+        IsRejected = true;
+
+        if(Order is null)
+            return;
+
+        AttachExecutionReport(new ExecutionReport(
+            commandId: Order.CommandId,
+            status: ExecutionStatus.Rejected,
+            filledQuantity: 0m,
+            averagePrice: null,
+            message: message ?? "Rejected by risk manager"));
     }
 
     public void Reset()
@@ -40,6 +55,7 @@ public sealed class MarketEvent
         Tick = null;
         Order = null;
         ExecutionReport = null;
+        IsRejected = false;
     }
 }
 
