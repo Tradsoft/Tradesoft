@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using FluentAssertions;
 using TradeSoft.Core.Events;
@@ -30,7 +31,7 @@ public sealed class DisruptorPipelineE2ETests
             DisruptorConfig.Default,
             strategy: strategy,
             riskManager: risk,
-            matchingEngine: matching,   
+            matchingEngine: matching,
             broker: broker);
 
         runner.Start();
@@ -111,7 +112,6 @@ public sealed class DisruptorPipelineE2ETests
         public void Validate(MarketEvent marketEvent)
         {
             ValidateCalls++;
-
         }
     }
 
@@ -157,13 +157,18 @@ public sealed class DisruptorPipelineE2ETests
             _completion = completion;
         }
 
-        public System.Collections.Generic.List<ExecutionReport> Reports { get; } = new();
+        public List<ExecutionReport> Reports { get; } = new();
 
-        public void OnExecutionReport(MarketEvent marketEvent)
+        public int TicksSeen { get; private set; }
+
+        public void OnTick(in TickData tick)
         {
-            if (marketEvent.ExecutionReport is null) return;
+            TicksSeen++;
+        }
 
-            Reports.Add(marketEvent.ExecutionReport);
+        public void OnExecutionReport(ExecutionReport report)
+        {
+            Reports.Add(report);
 
             if (Reports.Count >= _expectedReports)
                 _completion.Set();

@@ -14,6 +14,7 @@ public sealed class MatchingEventHandler : IEventHandler<MarketEvent>
     {
         if (_matching is null) return;
         if (data.Order is null) return;
+        if(data.ExecutionReport is not null) return;
         if (data.IsRejected) return;
 
         var report = _matching.Execute(data.Order, data.Tick);
