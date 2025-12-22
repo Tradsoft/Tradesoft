@@ -53,11 +53,14 @@ public sealed class SimulationRunner
             _config.WaitStrategy);
 
         _disruptor
-        .HandleEventsWith(new StrategyEventHandler(_strategy))
+        .HandleEventsWith(
+            new StrategyEventHandler(_strategy),
+            new BrokerTickHandler(_broker))
         .Then(new RiskManagerEventHandler(_riskManager))
         .Then(new MatchingEventHandler(_matchingEngine))
-        .Then(new BrokerEventHandler(_broker))
+        .Then(new BrokerReportHandler(_broker))
         .Then(new CleanupEventHandler());
+
 
 
         _ringBuffer = _disruptor.Start();

@@ -8,7 +8,9 @@ public sealed class ExecutionReport
         decimal filledQuantity,
         decimal? averagePrice = null,
         string? message = null,
-        DateTimeOffset? timestamp = null)
+        DateTimeOffset? timestamp = null,
+        string? symbol = null,
+        OrderSide? side = null)
     {
         CommandId = commandId;
         Status = status;
@@ -16,6 +18,8 @@ public sealed class ExecutionReport
         AveragePrice = averagePrice;
         Message = message;
         Timestamp = timestamp ?? DateTimeOffset.UtcNow;
+        Symbol = symbol;
+        Side = side;
     }
 
     public Guid CommandId { get; }
@@ -24,6 +28,8 @@ public sealed class ExecutionReport
     public decimal? AveragePrice { get; }
     public string? Message { get; }
     public DateTimeOffset Timestamp { get; }
+    public string? Symbol { get; }
+    public OrderSide? Side { get; }
 }
 
 public enum ExecutionStatus
