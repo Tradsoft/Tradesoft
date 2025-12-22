@@ -15,7 +15,8 @@ public interface IRiskManager
 
 public interface IBroker
 {
-    void OnExecutionReport(MarketEvent marketEvent);
+    void OnTick(in TickData tick);
+    void OnExecutionReport(ExecutionReport report);
 }
 
 public interface IMatchingEngine

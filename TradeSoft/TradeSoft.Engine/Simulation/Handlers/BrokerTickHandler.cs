@@ -4,19 +4,17 @@ using TradeSoft.Core.Trading;
 
 namespace TradeSoft.Engine.Simulation.Handlers;
 
-public sealed class BrokerEventHandler : IEventHandler<MarketEvent>
+public sealed class BrokerTickHandler : IEventHandler<MarketEvent>
 {
     private readonly IBroker? _broker;
 
-    public BrokerEventHandler(IBroker? broker)
-    {
-        _broker = broker;
-    }
+    public BrokerTickHandler(IBroker? broker) => _broker = broker;
 
     public void OnEvent(MarketEvent data, long sequence, bool endOfBatch)
     {
-        if (data.ExecutionReport is null)
-            return;
-        _broker?.OnExecutionReport(data);
+        if (_broker is null) return;
+        if (data.Tick is null) return;
+
+        _broker.OnTick(data.Tick.Value);
     }
 }

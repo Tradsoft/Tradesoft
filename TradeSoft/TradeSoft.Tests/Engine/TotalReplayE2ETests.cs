@@ -182,15 +182,20 @@ public sealed class RealisticReplayE2ETests
         }
 
         public List<ExecutionReport> Reports { get; } = new();
+        public int TicksSeen { get; private set; }
 
-        public void OnExecutionReport(MarketEvent e)
+        public void OnTick(in TickData tick)
         {
-            if (e.ExecutionReport is null) return;
+            TicksSeen++;
+        }
 
-            Reports.Add(e.ExecutionReport);
+        public void OnExecutionReport(ExecutionReport report)
+        {
+            Reports.Add(report);
 
             if (Reports.Count >= _expected)
                 _done.Set();
         }
     }
+
 }

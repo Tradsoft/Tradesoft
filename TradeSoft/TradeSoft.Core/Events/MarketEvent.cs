@@ -4,17 +4,23 @@ using TradeSoft.Core.Trading;
 namespace TradeSoft.Core.Events;
 
 /// <summary>
-/// Événement recyclé dans le ring buffer pour transporter données marché ou trading.
+/// Événement recyclé dans le ring buffer.
+/// Conteneur mutable : Tick + (optionnel) Order + (optionnel) ExecutionReport.
+/// IMPORTANT : le "routing" dans le pipeline doit se faire via la présence des champs,
+/// pas via Type, sinon un AttachOrder() peut masquer un Tick.
 /// </summary>
 public sealed class MarketEvent
 {
+    // Type est conservé uniquement comme "type source" (debug/inspection).
+    // On ne le modifie pas lors des Attach*.
     public MarketEventType Type { get; private set; } = MarketEventType.None;
+
     public TickData? Tick { get; private set; }
     public OrderCommand? Order { get; private set; }
     public ExecutionReport? ExecutionReport { get; private set; }
 
+    public bool IsRejected { get; private set; }
 
-    public bool IsRejected { get; set; }
     public void SetTick(in TickData tick)
     {
         Reset();
@@ -25,28 +31,26 @@ public sealed class MarketEvent
     public void AttachOrder(OrderCommand orderCommand)
     {
         Order = orderCommand;
-        Type = MarketEventType.OrderCommand;
     }
 
     public void AttachExecutionReport(ExecutionReport executionReport)
     {
         ExecutionReport = executionReport;
-        Type = MarketEventType.ExecutionReport;
     }
 
     public void Reject(string? message = null)
     {
         IsRejected = true;
 
-        if(Order is null)
+        if (Order is null)
             return;
 
-        AttachExecutionReport(new ExecutionReport(
+        ExecutionReport = new ExecutionReport(
             commandId: Order.CommandId,
             status: ExecutionStatus.Rejected,
             filledQuantity: 0m,
             averagePrice: null,
-            message: message ?? "Rejected by risk manager"));
+            message: message ?? "Rejected by risk manager");
     }
 
     public void Reset()
