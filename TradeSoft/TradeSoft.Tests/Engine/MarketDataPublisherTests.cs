@@ -1,13 +1,20 @@
-﻿using FluentAssertions;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using FluentAssertions;
 using TradeSoft.Core.Events;
 using TradeSoft.Core.MarketData;
 using TradeSoft.Core.Trading;
 using TradeSoft.Engine.Simulation;
 using TradeSoft.Infrastructure.Streaming;
+using Xunit;
 
 namespace TradeSoft.Tests.Engine;
 
-public class MarketDataPublisherTests
+public sealed class MarketDataPublisherTests
 {
     [Fact]
     public async Task PublishesTicksAcrossMultipleFilesWithoutResettingPipeline()
@@ -23,6 +30,7 @@ public class MarketDataPublisherTests
                 new TickData(1, 100.1, 100.2, 10),
                 new TickData(2, 100.2, 100.3, 20)
             };
+
             var ticksSecondFile = new[]
             {
                 new TickData(3, 100.3, 100.4, 30),
@@ -33,25 +41,33 @@ public class MarketDataPublisherTests
             WriteTicks(file1, ticksFirstFile);
             WriteTicks(file2, ticksSecondFile);
 
-            var totalTicks = ticksFirstFile.Length + ticksSecondFile.Length;
+            var expected = ticksFirstFile.Concat(ticksSecondFile).ToArray();
+            var totalTicks = expected.Length;
+
             using var completion = new ManualResetEventSlim(false);
-            var strategy = new CollectingStrategy(totalTicks, completion);
-            var runner = new SimulationRunner(DisruptorConfig.Default, strategy);
+
+            var strategy = new CollectingStrategy(expectedCount: totalTicks, completion);
+            var runner = new SimulationRunner(DisruptorConfig.Default, strategy: strategy);
 
             runner.Start();
+            try
+            {
+                var publisher = new MarketDataPublisher(
+                    streamer: new MultiFileStreamer(new[] { file1, file2 }),
+                    reader: new BinaryTickReader());
 
-            var publisher = new MarketDataPublisher(
-                runner,
-                new MultiFileStreamer(new[] { file1, file2 }),
-                new BinaryTickReader());
+                await publisher.PublishAsync(runner);
 
-            await publisher.PublishAsync();
+                completion.Wait(TimeSpan.FromSeconds(5))
+                    .Should().BeTrue("all ticks should flow through the disruptor");
 
-            completion.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue("all ticks should flow through the disruptor");
-            runner.Stop();
-
-            strategy.Ticks.Should().HaveCount(totalTicks);
-            strategy.Ticks.Should().ContainInOrder(ticksFirstFile.Concat(ticksSecondFile));
+                strategy.Ticks.Should().HaveCount(totalTicks);
+                strategy.Ticks.Should().ContainInOrder(expected);
+            }
+            finally
+            {
+                runner.Stop();
+            }
         }
         finally
         {
@@ -76,13 +92,13 @@ public class MarketDataPublisherTests
 
     private sealed class CollectingStrategy : IStrategy
     {
-        private readonly int _expected;
+        private readonly int _expectedCount;
         private readonly ManualResetEventSlim _completion;
         private readonly List<TickData> _ticks = new();
 
-        public CollectingStrategy(int expected, ManualResetEventSlim completion)
+        public CollectingStrategy(int expectedCount, ManualResetEventSlim completion)
         {
-            _expected = expected;
+            _expectedCount = expectedCount;
             _completion = completion;
         }
 
@@ -99,18 +115,14 @@ public class MarketDataPublisherTests
 
         public void OnMarketEvent(MarketEvent marketEvent)
         {
-            if (marketEvent.Type != MarketEventType.Tick || marketEvent.Tick is null)
-            {
-                return;
-            }
+            if (marketEvent.Tick is null) return;
 
             lock (_ticks)
             {
                 _ticks.Add(marketEvent.Tick.Value);
-                if (_ticks.Count == _expected)
-                {
+
+                if (_ticks.Count >= _expectedCount)
                     _completion.Set();
-                }
             }
         }
     }

@@ -25,9 +25,6 @@ public sealed class SimulatedBroker : IBroker, IBrokerState
         _fees = fees ?? BrokerFees.None;
     }
 
-    // -------------------------
-    // IBrokerState
-    // -------------------------
     public decimal Cash => _cash;
     public decimal Position => _position;
     public decimal AveragePrice => _avgPrice;
@@ -75,9 +72,6 @@ public sealed class SimulatedBroker : IBroker, IBrokerState
         }
     }
 
-    // -------------------------
-    // IBroker
-    // -------------------------
     public void OnTick(in TickData tick)
     {
         _lastBid = _spec.RoundPrice((decimal)tick.Bid);

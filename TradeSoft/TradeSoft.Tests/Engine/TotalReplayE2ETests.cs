@@ -56,28 +56,31 @@ public sealed class TotalReplayE2ETests
                 broker: broker);
 
             runner.Start();
+            try
+            {
+                var publisher = new MarketDataPublisher(
+                    streamer: new MultiFileStreamer(new[] { file1, file2 }),
+                    reader: new BinaryTickReader());
 
-            var publisher = new MarketDataPublisher(
-                runner,
-                new MultiFileStreamer(new[] { file1, file2 }),
-                new BinaryTickReader());
+                await publisher.PublishAsync(runner);
 
-            await publisher.PublishAsync();
+                done.Wait(TimeSpan.FromSeconds(2))
+                    .Should().BeTrue("le broker doit recevoir un ExecutionReport généré par matching");
 
-            done.Wait(TimeSpan.FromSeconds(2))
-                .Should().BeTrue("le broker doit recevoir un ExecutionReport généré par matching");
+                broker.Reports.Should().HaveCount(1);
+                var report = broker.Reports[0];
 
-            broker.Reports.Should().HaveCount(1);
-            var report = broker.Reports[0];
+                report.Status.Should().Be(ExecutionStatus.Filled);
+                report.FilledQuantity.Should().Be(2.5m);
+                report.AveragePrice.Should().Be(1.2004m);
 
-            report.Status.Should().Be(ExecutionStatus.Filled);
-            report.FilledQuantity.Should().Be(2.5m);
-            report.AveragePrice.Should().Be(1.2004m);
-
-            risk.ValidateCalls.Should().Be(1);
-            matching.ExecuteCalls.Should().Be(1);
-
-            runner.Stop();
+                risk.ValidateCalls.Should().Be(1);
+                matching.ExecuteCalls.Should().Be(1);
+            }
+            finally
+            {
+                runner.Stop();
+            }
         }
         finally
         {
@@ -99,8 +102,6 @@ public sealed class TotalReplayE2ETests
             writer.Write((byte)t.Flags);
         }
     }
-
-    // ----------------- Test doubles -----------------
 
     private sealed class TriggerBuyStrategy : IStrategy
     {
@@ -144,7 +145,7 @@ public sealed class TotalReplayE2ETests
         {
             if (e.Order is null) return;
             if (e.IsRejected) return;
-            if (e.ReportCount > 0) return;     // v4+
+            if (e.ReportCount > 0) return;
             if (e.Tick is null) return;
 
             ExecuteCalls++;
@@ -177,9 +178,8 @@ public sealed class TotalReplayE2ETests
         }
 
         public List<ExecutionReport> Reports { get; } = new();
-        public int TicksSeen { get; private set; }
 
-        public void OnTick(in TickData tick) => TicksSeen++;
+        public void OnTick(in TickData tick) { }
 
         public void OnExecutionReport(ExecutionReport report)
         {

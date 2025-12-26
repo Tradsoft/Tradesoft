@@ -12,6 +12,8 @@ public readonly record struct TradeFill(
     OrderSide Side,
     ExecutionStatus Status,
     decimal Quantity,
+    decimal SignedQuantity,
     decimal Price,
+    decimal Notional,
     DateTimeOffset Timestamp
 );
