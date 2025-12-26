@@ -21,5 +21,5 @@ public interface IBroker
 
 public interface IMatchingEngine
 {
-    ExecutionReport Execute(OrderCommand command, TickData? tick);
+    void Process(MarketEvent e);
 }

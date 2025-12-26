@@ -7,16 +7,13 @@ namespace TradeSoft.Engine.Simulation.Handlers;
 public sealed class StrategyEventHandler : IEventHandler<MarketEvent>
 {
     private readonly IStrategy? _strategy;
-
-    public StrategyEventHandler(IStrategy? strategy)
-    {
-        _strategy = strategy;
-    }
+    public StrategyEventHandler(IStrategy? strategy) => _strategy = strategy;
 
     public void OnEvent(MarketEvent data, long sequence, bool endOfBatch)
     {
-        if(data.Tick is null)
-            return;
-        _strategy?.OnMarketEvent(data);
+        if (_strategy is null) return;
+        if (data.Tick is null) return;
+
+        _strategy.OnMarketEvent(data);
     }
 }

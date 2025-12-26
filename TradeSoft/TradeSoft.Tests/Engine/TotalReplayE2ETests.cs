@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -14,26 +13,24 @@ using Xunit;
 
 namespace TradeSoft.Tests.Engine;
 
-public sealed class RealisticReplayE2ETests
+public sealed class TotalReplayE2ETests
 {
     [Fact]
     public async Task ReplayBinaryTicks_ShouldTriggerStrategy_Risk_Matching_Broker_EndToEnd()
     {
-        // Arrange
         var tempDir = Directory.CreateTempSubdirectory();
         try
         {
             var file1 = Path.Combine(tempDir.FullName, "EURUSD_2019.bin");
             var file2 = Path.Combine(tempDir.FullName, "EURUSD_2020.bin");
 
-            // TickData = 33 bytes : long ts, double bid, double ask, long vol, byte flags
             var ticks1 = new[]
             {
                 new TickData(1, 1.1000, 1.1002, 10),
                 new TickData(2, 1.1001, 1.1003, 20),
             };
 
-            var triggerTick = new TickData(3, 1.2000, 1.2004, 99); // <- Ask = 1.2004
+            var triggerTick = new TickData(3, 1.2000, 1.2004, 99);
             var ticks2 = new[]
             {
                 triggerTick,
@@ -47,7 +44,7 @@ public sealed class RealisticReplayE2ETests
             using var done = new ManualResetEventSlim(false);
 
             var broker = new CapturingBroker(expectedReports: 1, done);
-            var matching = new ImmediateMarketMatchingEngine();
+            var matching = new ImmediateFillMatchingEngine();
             var risk = new AlwaysPassRiskManager();
             var strategy = new TriggerBuyStrategy(triggerTimestamp: 3, symbol: "EURUSD", qty: 2.5m);
 
@@ -65,18 +62,17 @@ public sealed class RealisticReplayE2ETests
                 new MultiFileStreamer(new[] { file1, file2 }),
                 new BinaryTickReader());
 
-            // Act
             await publisher.PublishAsync();
 
-            // Assert
-            done.Wait(TimeSpan.FromSeconds(2)).Should().BeTrue("le broker doit recevoir un ExecutionReport généré par matching");
+            done.Wait(TimeSpan.FromSeconds(2))
+                .Should().BeTrue("le broker doit recevoir un ExecutionReport généré par matching");
 
             broker.Reports.Should().HaveCount(1);
             var report = broker.Reports[0];
 
             report.Status.Should().Be(ExecutionStatus.Filled);
             report.FilledQuantity.Should().Be(2.5m);
-            report.AveragePrice.Should().Be(1.2004m); // BUY => exécuté au Ask du tick trigger
+            report.AveragePrice.Should().Be(1.2004m);
 
             risk.ValidateCalls.Should().Be(1);
             matching.ExecuteCalls.Should().Be(1);
@@ -99,8 +95,8 @@ public sealed class RealisticReplayE2ETests
             writer.Write(t.Timestamp);
             writer.Write(t.Bid);
             writer.Write(t.Ask);
-            writer.Write(t.Volume);             
-            writer.Write((byte)t.Flags);         
+            writer.Write(t.Volume);
+            writer.Write((byte)t.Flags);
         }
     }
 
@@ -124,49 +120,48 @@ public sealed class RealisticReplayE2ETests
             if (e.Tick is null) return;
             if (e.Tick.Value.Timestamp != _triggerTimestamp) return;
 
-            var cmd = new OrderCommand(
+            e.AttachOrder(new OrderCommand(
                 commandId: Guid.NewGuid(),
                 symbol: _symbol,
                 side: OrderSide.Buy,
                 quantity: _qty,
                 type: OrderType.Market,
-                timeInForce: OrderTimeInForce.Day);
-
-            e.AttachOrder(cmd);
+                timeInForce: OrderTimeInForce.Day));
         }
     }
 
     private sealed class AlwaysPassRiskManager : IRiskManager
     {
         public int ValidateCalls { get; private set; }
-
-        public void Validate(MarketEvent e)
-        {
-            ValidateCalls++;
-        }
+        public void Validate(MarketEvent e) => ValidateCalls++;
     }
 
-    private sealed class ImmediateMarketMatchingEngine : IMatchingEngine
+    private sealed class ImmediateFillMatchingEngine : IMatchingEngine
     {
         public int ExecuteCalls { get; private set; }
 
-        public ExecutionReport Execute(OrderCommand command, TickData? tick)
+        public void Process(MarketEvent e)
         {
+            if (e.Order is null) return;
+            if (e.IsRejected) return;
+            if (e.ReportCount > 0) return;     // v4+
+            if (e.Tick is null) return;
+
             ExecuteCalls++;
 
-            if (tick is null)
-            {
-                return new ExecutionReport(command.CommandId, ExecutionStatus.Rejected, 0m, null, "No tick context");
-            }
+            var tick = e.Tick.Value;
+            var cmd = e.Order;
 
-            var px = command.Side == OrderSide.Buy ? (decimal)tick.Value.Ask : (decimal)tick.Value.Bid;
+            var basePx = cmd.Side == OrderSide.Buy ? (decimal)tick.Ask : (decimal)tick.Bid;
 
-            return new ExecutionReport(
-                commandId: command.CommandId,
+            e.AttachExecutionReport(new ExecutionReport(
+                commandId: cmd.CommandId,
+                symbol: cmd.Symbol,
+                side: cmd.Side,
                 status: ExecutionStatus.Filled,
-                filledQuantity: command.Quantity,
-                averagePrice: px,
-                message: "Immediate market fill");
+                filledQuantity: cmd.Quantity,
+                averagePrice: basePx,
+                message: "Immediate fill"));
         }
     }
 
@@ -184,18 +179,12 @@ public sealed class RealisticReplayE2ETests
         public List<ExecutionReport> Reports { get; } = new();
         public int TicksSeen { get; private set; }
 
-        public void OnTick(in TickData tick)
-        {
-            TicksSeen++;
-        }
+        public void OnTick(in TickData tick) => TicksSeen++;
 
         public void OnExecutionReport(ExecutionReport report)
         {
             Reports.Add(report);
-
-            if (Reports.Count >= _expected)
-                _done.Set();
+            if (Reports.Count >= _expected) _done.Set();
         }
     }
-
 }

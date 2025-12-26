@@ -1,23 +1,35 @@
-﻿using TradeSoft.Core.MarketData;
+﻿using System;
+using TradeSoft.Core.MarketData;
 using TradeSoft.Core.Trading;
 
 namespace TradeSoft.Core.Events;
 
 /// <summary>
 /// Événement recyclé dans le ring buffer.
-/// Conteneur mutable : Tick + (optionnel) Order + (optionnel) ExecutionReport.
-/// IMPORTANT : le "routing" dans le pipeline doit se faire via la présence des champs,
-/// pas via Type, sinon un AttachOrder() peut masquer un Tick.
+/// Conteneur mutable : Tick + (optionnel) Order + (0..N) ExecutionReports.
+/// IMPORTANT : le routing doit se faire via la présence des champs (Tick/Order/Reports),
+/// pas via Type.
 /// </summary>
 public sealed class MarketEvent
 {
-    // Type est conservé uniquement comme "type source" (debug/inspection).
-    // On ne le modifie pas lors des Attach*.
     public MarketEventType Type { get; private set; } = MarketEventType.None;
 
     public TickData? Tick { get; private set; }
     public OrderCommand? Order { get; private set; }
-    public ExecutionReport? ExecutionReport { get; private set; }
+
+    // -------------------------
+    // Multi-report (v4+)
+    // -------------------------
+    public const int MaxReports = 8;
+    private readonly ExecutionReport?[] _reports = new ExecutionReport?[MaxReports];
+    private int _reportCount;
+
+    public int ReportCount => _reportCount;
+    public bool HasReports => _reportCount > 0;
+    public bool HasCapacityForReport => _reportCount < MaxReports;
+
+    public ExecutionReport? GetReport(int index)
+        => (uint)index < (uint)_reportCount ? _reports[index] : null;
 
     public bool IsRejected { get; private set; }
 
@@ -33,10 +45,20 @@ public sealed class MarketEvent
         Order = orderCommand;
     }
 
-    public void AttachExecutionReport(ExecutionReport executionReport)
+    public void AddReport(ExecutionReport report)
     {
-        ExecutionReport = executionReport;
+        if (report is null) throw new ArgumentNullException(nameof(report));
+
+        if (_reportCount >= MaxReports)
+            throw new InvalidOperationException(
+                $"MarketEvent report buffer overflow (MaxReports={MaxReports}). " +
+                $"Increase MaxReports or drain reports more often.");
+
+        _reports[_reportCount++] = report;
     }
+
+    // Compat legacy
+    public void AttachExecutionReport(ExecutionReport executionReport) => AddReport(executionReport);
 
     public void Reject(string? message = null)
     {
@@ -45,12 +67,14 @@ public sealed class MarketEvent
         if (Order is null)
             return;
 
-        ExecutionReport = new ExecutionReport(
+        AddReport(new ExecutionReport(
             commandId: Order.CommandId,
             status: ExecutionStatus.Rejected,
             filledQuantity: 0m,
             averagePrice: null,
-            message: message ?? "Rejected by risk manager");
+            message: message ?? "Rejected by risk manager",
+            symbol: Order.Symbol,
+            side: Order.Side));
     }
 
     public void Reset()
@@ -58,8 +82,12 @@ public sealed class MarketEvent
         Type = MarketEventType.None;
         Tick = null;
         Order = null;
-        ExecutionReport = null;
         IsRejected = false;
+
+        for (int i = 0; i < _reportCount; i++)
+            _reports[i] = null;
+
+        _reportCount = 0;
     }
 }
 
