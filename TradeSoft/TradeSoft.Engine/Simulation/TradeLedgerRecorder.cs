@@ -6,18 +6,22 @@ using TradeSoft.Core.Trading;
 namespace TradeSoft.Engine.Backtesting;
 
 /// <summary>
-/// Capture les fills (execution reports) pour sortir un "journal de trades".
+/// Recorder des fills (ExecutionReport) => liste de TradeFill.
 /// Compatible multi-reports + partial fills.
 /// </summary>
-public sealed class TradeLedger : IBroker
+public sealed class TradeLedgerRecorder : IBroker
 {
+    private readonly string? _symbolFilter;
     private readonly List<TradeFill> _fills = new();
+
+    public TradeLedgerRecorder(string? symbolFilter = null)
+    {
+        _symbolFilter = string.IsNullOrWhiteSpace(symbolFilter) ? null : symbolFilter;
+    }
 
     public IReadOnlyList<TradeFill> Fills => _fills;
 
-    public void OnTick(in TickData tick)
-    {
-    }
+    public void OnTick(in TickData tick) { }
 
     public void OnExecutionReport(ExecutionReport report)
     {
@@ -30,6 +34,10 @@ public sealed class TradeLedger : IBroker
         if (string.IsNullOrWhiteSpace(report.Symbol))
             throw new InvalidOperationException("ExecutionReport.Symbol is required.");
 
+        if (_symbolFilter is not null &&
+            !string.Equals(report.Symbol, _symbolFilter, StringComparison.OrdinalIgnoreCase))
+            return;
+
         if (report.Side is null)
             throw new InvalidOperationException("ExecutionReport.Side is required.");
 
@@ -39,13 +47,19 @@ public sealed class TradeLedger : IBroker
         if (report.FilledQuantity <= 0m)
             return;
 
+        var side = report.Side.Value;
+        var qty = report.FilledQuantity;
+        var px = report.AveragePrice.Value;
+
         _fills.Add(new TradeFill(
             CommandId: report.CommandId,
             Symbol: report.Symbol!,
-            Side: report.Side.Value,
+            Side: side,
             Status: report.Status,
-            Quantity: report.FilledQuantity,
-            Price: report.AveragePrice.Value,
+            Quantity: qty,
+            SignedQuantity: side == OrderSide.Buy ? +qty : -qty,
+            Price: px,
+            Notional: qty * px,
             Timestamp: report.Timestamp
         ));
     }

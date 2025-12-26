@@ -9,7 +9,6 @@ namespace TradeSoft.Core.Backtesting;
 /// </summary>
 public sealed class BacktestResult
 {
-    // Backward-compatible ctor
     public BacktestResult(
         string strategyName,
         string symbol,
