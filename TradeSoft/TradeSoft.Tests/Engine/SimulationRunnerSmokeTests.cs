@@ -46,9 +46,13 @@ public class SimulationRunnerSmokeTests
 
     private sealed class NoOPMatchingEngine : IMatchingEngine
     {
-        public ExecutionReport Execute(OrderCommand command, TickData? tick)
-            => new ExecutionReport(command.CommandId, ExecutionStatus.Rejected, 0m, null, "NoOp");
+        public void Process(MarketEvent e)
+        {
+            //if (e.Order is null || e.Tick is null || e.IsRejected || e.ExecutionReport is not null) return;
+            //e.AttachExecutionReport(new ExecutionReport(...));
+        }
     }
+
 
     private sealed class NoOpBroker : IBroker
     {

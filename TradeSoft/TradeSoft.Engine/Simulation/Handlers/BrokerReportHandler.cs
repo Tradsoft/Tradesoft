@@ -13,9 +13,16 @@ public sealed class BrokerReportHandler : IEventHandler<MarketEvent>
     public void OnEvent(MarketEvent data, long sequence, bool endOfBatch)
     {
         if (_broker is null) return;
-        if (data.ExecutionReport is null) return;
 
-        var report = data.ExecutionReport; 
-        _broker.OnExecutionReport(report);
+        var count = data.ReportCount;
+        if (count == 0) return;
+
+        for (int i = 0; i < count; i++)
+        {
+            var report = data.GetReport(i);
+            if (report is null) continue;
+
+            _broker.OnExecutionReport(report);
+        }
     }
 }
