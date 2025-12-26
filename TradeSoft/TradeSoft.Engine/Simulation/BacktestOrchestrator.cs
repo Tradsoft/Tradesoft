@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using TradeSoft.Core.Backtesting;
 using TradeSoft.Core.Trading;
@@ -9,6 +10,14 @@ namespace TradeSoft.Engine.Backtesting;
 
 public sealed class BacktestOrchestrator
 {
+    /// <summary>
+    /// One-shot backtest run :
+    /// - construit runner + brokers (simBroker + ledger + equity recorder)
+    /// - start disruptor
+    /// - replay via publishAsync(runner)
+    /// - stop disruptor
+    /// - retourne BacktestRunResult (result + fills)
+    /// </summary>
     public async Task<BacktestRunResult> RunAsync(
         string strategyName,
         string symbol,
@@ -18,19 +27,25 @@ public sealed class BacktestOrchestrator
         IStrategy strategy,
         IRiskManager riskManager,
         IMatchingEngine matchingEngine,
-        Func<Task> publishAsync)
+        BucketSpec? bucket,
+        Func<SimulationRunner, Task> publishAsync,
+        decimal riskFreeRatePerPeriod = 0m,
+        double? annualizationFactor = null,
+        CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(strategyName)) throw new ArgumentException("StrategyName is required.", nameof(strategyName));
-        if (string.IsNullOrWhiteSpace(symbol)) throw new ArgumentException("Symbol is required.", nameof(symbol));
+        if (string.IsNullOrWhiteSpace(strategyName))
+            throw new ArgumentException("StrategyName is required.", nameof(strategyName));
+        if (string.IsNullOrWhiteSpace(symbol))
+            throw new ArgumentException("Symbol is required.", nameof(symbol));
         if (spec is null) throw new ArgumentNullException(nameof(spec));
         if (strategy is null) throw new ArgumentNullException(nameof(strategy));
         if (riskManager is null) throw new ArgumentNullException(nameof(riskManager));
         if (matchingEngine is null) throw new ArgumentNullException(nameof(matchingEngine));
         if (publishAsync is null) throw new ArgumentNullException(nameof(publishAsync));
 
-        var simBroker = new SimulatedBroker(spec, initialCash: initialCash);
-        var recorder = new EquityCurveRecorder(simBroker /* IBrokerState */, symbol);
-        var ledger = new TradeLedger();
+        var simBroker = new SimulatedBroker(spec, initialCash: initialCash, fees: BrokerFees.None);
+        var recorder = new EquityCurveRecorder(state: simBroker, symbol: symbol);
+        var ledger = new TradeLedgerRecorder();
         var composite = new CompositeBroker(simBroker, ledger, recorder);
 
         var runner = new SimulationRunner(
@@ -44,12 +59,22 @@ public sealed class BacktestOrchestrator
 
         try
         {
-            await publishAsync();
+            ct.ThrowIfCancellationRequested();
+
+            await publishAsync(runner).ConfigureAwait(false);
 
             var curve = recorder.Curve.ToArray();
             var fills = ledger.Fills.ToArray();
 
-            var result = new BacktestResult(strategyName, symbol, curve);
+            var baseResult = new BacktestResult(strategyName, symbol, curve);
+
+            var result = bucket is null
+                ? baseResult
+                : baseResult.WithAnalytics(
+                    bucket: bucket.Value,
+                    riskFreeRatePerPeriod: riskFreeRatePerPeriod,
+                    annualizationFactor: annualizationFactor);
+
             return new BacktestRunResult(result, fills);
         }
         finally
@@ -59,9 +84,6 @@ public sealed class BacktestOrchestrator
     }
 }
 
-/// <summary>
-/// Ce que tu sors à la fin du backtest (mid-frequency) : curve + fills.
-/// </summary>
 public readonly record struct BacktestRunResult(
     BacktestResult Result,
     TradeFill[] Fills
