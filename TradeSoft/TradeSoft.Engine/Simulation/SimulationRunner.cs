@@ -38,9 +38,7 @@ public sealed class SimulationRunner
     public void Start()
     {
         if (_disruptor is not null)
-        {
             return;
-        }
 
         ValidateConfig();
         _cancellationSource = new CancellationTokenSource();
@@ -53,15 +51,13 @@ public sealed class SimulationRunner
             _config.WaitStrategy);
 
         _disruptor
-        .HandleEventsWith(
-            new StrategyEventHandler(_strategy),
-            new BrokerTickHandler(_broker))
-        .Then(new RiskManagerEventHandler(_riskManager))
-        .Then(new MatchingEventHandler(_matchingEngine))
-        .Then(new BrokerReportHandler(_broker))
-        .Then(new CleanupEventHandler());
+            .HandleEventsWith(new BrokerTickHandler(_broker))
 
-
+            .Then(new StrategyEventHandler(_strategy))
+            .Then(new RiskManagerEventHandler(_riskManager))
+            .Then(new MatchingEventHandler(_matchingEngine))
+            .Then(new BrokerReportHandler(_broker))
+            .Then(new CleanupEventHandler());
 
         _ringBuffer = _disruptor.Start();
     }
@@ -77,7 +73,7 @@ public sealed class SimulationRunner
         _disruptor.Shutdown();
         _disruptor = null;
         _ringBuffer = null;
-        _cancellationSource.Dispose();
+        _cancellationSource?.Dispose();
         _cancellationSource = null;
     }
 

@@ -15,7 +15,6 @@ public sealed class DisruptorPipelineE2ETests
     [Fact]
     public void Tick_To_Order_To_Risk_To_Matching_To_Broker_Should_Produce_Filled_Report()
     {
-        // Arrange
         using var completion = new ManualResetEventSlim(false);
 
         var triggerTimestamp = 3L;
@@ -38,14 +37,12 @@ public sealed class DisruptorPipelineE2ETests
 
         try
         {
-            // Publish a few ticks (timestamp 1..5). Trigger is at ts=3
             runner.PublishTick(new TickData(1, 1.1000, 1.1002, 10));
             runner.PublishTick(new TickData(2, 1.1001, 1.1003, 10));
             runner.PublishTick(new TickData(3, 1.2000, 1.2004, 99));
             runner.PublishTick(new TickData(4, 1.1002, 1.1005, 10));
             runner.PublishTick(new TickData(5, 1.1003, 1.1006, 10));
 
-            // Assert wait for broker to receive a report
             completion.Wait(TimeSpan.FromSeconds(2))
                 .Should().BeTrue("le broker doit recevoir un ExecutionReport après le matching");
 
@@ -54,11 +51,8 @@ public sealed class DisruptorPipelineE2ETests
 
             report.Status.Should().Be(ExecutionStatus.Filled);
             report.FilledQuantity.Should().Be(expectedQty);
-
-            // BUY => prix d'exécution = Ask du tick trigger (1.2004)
             report.AveragePrice.Should().Be(1.2004m);
 
-            // Le risk et le matching ont bien été traversés
             risk.ValidateCalls.Should().Be(1);
             matching.ExecuteCalls.Should().Be(1);
         }
@@ -91,16 +85,14 @@ public sealed class DisruptorPipelineE2ETests
 
             if (marketEvent.Tick.Value.Timestamp == _triggerTimestamp)
             {
-                var cmd = new OrderCommand(
+                marketEvent.AttachOrder(new OrderCommand(
                     commandId: Guid.NewGuid(),
                     symbol: _symbol,
                     side: OrderSide.Buy,
                     quantity: _qty,
                     type: OrderType.Market,
                     timeInForce: OrderTimeInForce.Day,
-                    limitPrice: null);
-
-                marketEvent.AttachOrder(cmd);
+                    limitPrice: null));
             }
         }
     }
@@ -109,40 +101,37 @@ public sealed class DisruptorPipelineE2ETests
     {
         public int ValidateCalls { get; private set; }
 
-        public void Validate(MarketEvent marketEvent)
-        {
-            ValidateCalls++;
-        }
+        public void Validate(MarketEvent marketEvent) => ValidateCalls++;
     }
 
     private sealed class ImmediateFillMatchingEngine : IMatchingEngine
     {
         public int ExecuteCalls { get; private set; }
 
-        public ExecutionReport Execute(OrderCommand command, TickData? tick)
+        public void Process(MarketEvent e)
         {
+            if (e.Order is null) return;
+            if (e.IsRejected) return;
+
+            if (e.ReportCount > 0) return;
+
+            if (e.Tick is null) return;
+
             ExecuteCalls++;
 
-            if (tick is null)
-            {
-                return new ExecutionReport(
-                    commandId: command.CommandId,
-                    status: ExecutionStatus.Rejected,
-                    filledQuantity: 0m,
-                    averagePrice: null,
-                    message: "No tick context.");
-            }
+            var tick = e.Tick.Value;
+            var cmd = e.Order;
 
-            var px = command.Side == OrderSide.Buy
-                ? (decimal)tick.Value.Ask
-                : (decimal)tick.Value.Bid;
+            var basePx = cmd.Side == OrderSide.Buy ? (decimal)tick.Ask : (decimal)tick.Bid;
 
-            return new ExecutionReport(
-                commandId: command.CommandId,
+            e.AttachExecutionReport(new ExecutionReport(
+                commandId: cmd.CommandId,
+                symbol: cmd.Symbol,
+                side: cmd.Side,
                 status: ExecutionStatus.Filled,
-                filledQuantity: command.Quantity,
-                averagePrice: px,
-                message: "Immediate fill");
+                filledQuantity: cmd.Quantity,
+                averagePrice: basePx,
+                message: "Immediate fill"));
         }
     }
 
@@ -158,13 +147,9 @@ public sealed class DisruptorPipelineE2ETests
         }
 
         public List<ExecutionReport> Reports { get; } = new();
-
         public int TicksSeen { get; private set; }
 
-        public void OnTick(in TickData tick)
-        {
-            TicksSeen++;
-        }
+        public void OnTick(in TickData tick) => TicksSeen++;
 
         public void OnExecutionReport(ExecutionReport report)
         {
