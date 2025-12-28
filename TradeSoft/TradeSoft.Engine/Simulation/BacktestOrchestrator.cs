@@ -10,14 +10,6 @@ namespace TradeSoft.Engine.Backtesting;
 
 public sealed class BacktestOrchestrator
 {
-    /// <summary>
-    /// One-shot backtest run :
-    /// - construit runner + brokers (simBroker + ledger + equity recorder)
-    /// - start disruptor
-    /// - replay via publishAsync(runner)
-    /// - stop disruptor
-    /// - retourne BacktestRunResult (result + fills)
-    /// </summary>
     public async Task<BacktestRunResult> RunAsync(
         string strategyName,
         string symbol,
