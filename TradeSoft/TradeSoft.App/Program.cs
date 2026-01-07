@@ -1,105 +1,81 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using TradeSoft.Core.Backtesting;
-using TradeSoft.Core.MarketData;
-using TradeSoft.Core.Trading;
-using TradeSoft.Engine.Backtesting;
-using TradeSoft.Engine.Simulation;
-using TradeSoft.Engine.Simulation.Models;
+﻿using Microsoft.Extensions.Logging;
+using TradeSoft.Core.Pipeline;
+using TradeSoft.Engine;
+using TradeSoft.Engine.Strategies;
+using TradeSoft.Infrastructure.IO;
 
-internal static class Program
+class Program
 {
-    public static async Task Main()
+    static void Main(string[] args)
     {
-        var spec = new InstrumentSpec("EURUSD", priceScalePow10: 5);
-
-        IStrategy strategy = new DebugBuyOnceStrategy("EURUSD", 50m);
-        IRiskManager risk = new AlwaysPassRiskManager();
-        ILatencyModel latency = new FixedLatencyModel(0);
-        ISlippageModel slippage = new VolumeShareSlippageModel(maxParticipation: 0.2m, impactPipsPer1x: 2.0m);
-        IMatchingEngine matching = new MatchingEngine(spec, latency, slippage);
-
-        var orchestrator = new BacktestOrchestrator();
-
-        Func<SimulationRunner, Task> publishAsync = runner =>
+        // ---------------------------------------------------------
+        // 1. Configuration du Logger
+        // ---------------------------------------------------------
+        using ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
         {
-            var ticks = BuildFakeTicks();
-            foreach (var t in ticks)
-                runner.PublishTick(t);
+            builder
+                .AddFilter("Microsoft", LogLevel.Warning)
+                .AddFilter("System", LogLevel.Warning)
+                .AddConsole()
+                .SetMinimumLevel(LogLevel.Information);
+        });
 
-            return Task.CompletedTask;
+        // ---------------------------------------------------------
+        // 2. Configuration du Chemin des Données (Multi-Dev Friendly)
+        // ---------------------------------------------------------
+        string[] cheminsPossibles = new[]
+        {
+            // Louis
+            @"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\EURUSD",
+            
+            // Chemin relatif standard (si le dossier Data est à la racine de la solution)
+            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD")),
+            
         };
 
-        var bucket = new BucketSpec(Size: 10, Mode: BucketingMode.Last);
+        string? dossierData = cheminsPossibles.FirstOrDefault(path => Directory.Exists(path));
 
-        var run = await orchestrator.RunAsync(
-            strategyName: "DebugStrat",
-            symbol: "EURUSD",
-            spec: spec,
-            initialCash: 100_000m,
-            disruptorConfig: DisruptorConfig.Default,
-            strategy: strategy,
-            riskManager: risk,
-            matchingEngine: matching,
-            bucket: bucket,
-            publishAsync: publishAsync);
-
-        Console.WriteLine($"Curve points: {run.Result.EquityCurve.Count}");
-        Console.WriteLine($"Fills: {run.Fills.Length}");
-        Console.WriteLine($"TotalReturn: {run.Result.TotalReturn}");
-        Console.WriteLine($"MaxDrawdown: {run.Result.MaxDrawdown}");
-        Console.WriteLine($"Metrics.Vol: {run.Result.Metrics?.Volatility}");
-        Console.WriteLine($"Metrics.Sharpe: {run.Result.Metrics?.Sharpe}");
-    }
-
-    private static List<TickData> BuildFakeTicks()
-    {
-        return new List<TickData>
+        if (string.IsNullOrEmpty(dossierData))
         {
-            new TickData(0,   1.2000, 1.2004, volume: 10),
-            new TickData(1,   1.2000, 1.2004, volume: 10),
-            new TickData(9,   1.2000, 1.2004, volume: 10),
-            new TickData(10,  1.2000, 1.2004, volume: 10),
-            new TickData(11,  1.2000, 1.2004, volume: 10),
-            new TickData(19,  1.2000, 1.2004, volume: 10),
-            new TickData(29,  1.2000, 1.2004, volume: 10),
-        };
-    }
-
-    private sealed class DebugBuyOnceStrategy : IStrategy
-    {
-        private readonly string _symbol;
-        private readonly decimal _qty;
-        private bool _sent;
-
-        public DebugBuyOnceStrategy(string symbol, decimal qty)
-        {
-            _symbol = symbol;
-            _qty = qty;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("ERREUR FATALE : Aucune donnée trouvée !");
+            Console.WriteLine("Chemins testés :");
+            foreach (var p in cheminsPossibles) Console.WriteLine($" - {p}");
+            Console.ResetColor();
+            return;
         }
 
-        public void OnMarketEvent(TradeSoft.Core.Events.MarketEvent e)
+        Console.WriteLine($"✅ Dossier de données validé : {dossierData}");
+
+        try
         {
-            if (_sent) return;
-            if (e.Tick is null) return;
+            // ---------------------------------------------------------
+            // 3. Initialisation des Composants (Dependency Injection manuelle)
+            // ---------------------------------------------------------
 
-            if (e.Tick.Value.Timestamp < 1) return;
+            var providerLogger = loggerFactory.CreateLogger<MultiFileTickProvider>();
+            var provider = new MultiFileTickProvider(dossierData, providerLogger);
 
-            _sent = true;
-            e.AttachOrder(new OrderCommand(
-                commandId: Guid.NewGuid(),
-                symbol: _symbol,
-                side: OrderSide.Buy,
-                quantity: _qty,
-                type: OrderType.Market,
-                timeInForce: OrderTimeInForce.Day));
+            Handler strategy = new RandomStrategy();
+
+            var runnerLogger = loggerFactory.CreateLogger<BacktestRunner>();
+            var runner = new BacktestRunner(provider, strategy, runnerLogger);
+
+            // ---------------------------------------------------------
+            // 4. Lancement du Backtest
+            // ---------------------------------------------------------
+            var start = new DateTime(2015, 01, 01);
+            var end = new DateTime(2015, 02, 01);
+
+            Console.WriteLine("--- Démarrage du moteur ---");
+
+            runner.Run("EURUSD", start, end);
         }
-    }
-
-    private sealed class AlwaysPassRiskManager : IRiskManager
-    {
-        public void Validate(TradeSoft.Core.Events.MarketEvent marketEvent) { }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\nCRASH DU PROGRAMME :\n{ex}");
+            Console.ResetColor();
+        }
     }
 }
