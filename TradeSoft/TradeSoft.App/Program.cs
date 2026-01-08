@@ -2,6 +2,7 @@
 using TradeSoft.Core.Pipeline;
 using TradeSoft.Engine;
 using TradeSoft.Engine.Strategies;
+using TradeSoft.Engine.Management;
 using TradeSoft.Infrastructure.IO;
 
 class Program
@@ -21,7 +22,7 @@ class Program
         });
 
         // ---------------------------------------------------------
-        // 2. Configuration du Chemin des Données (Multi-Dev Friendly)
+        // 2. Configuration du Chemin des Données
         // ---------------------------------------------------------
         string[] cheminsPossibles = new[]
         {
@@ -38,7 +39,7 @@ class Program
         if (string.IsNullOrEmpty(dossierData))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("ERREUR FATALE : Aucune donnée trouvée !");
+            Console.WriteLine("Aucune donnée trouvée !");
             Console.WriteLine("Chemins testés :");
             foreach (var p in cheminsPossibles) Console.WriteLine($" - {p}");
             Console.ResetColor();
@@ -56,7 +57,14 @@ class Program
             var providerLogger = loggerFactory.CreateLogger<MultiFileTickProvider>();
             var provider = new MultiFileTickProvider(dossierData, providerLogger);
 
+            // On démarre avec 100,000$
+            var portfolioManager = new PortfolioManager(100_000);
+
             Handler strategy = new RandomStrategy();
+            Handler broker = new TradeSoft.Engine.Execution.SimulatedBroker();
+
+            strategy.SetNext(broker);
+            broker.SetNext(portfolioManager);
 
             var runnerLogger = loggerFactory.CreateLogger<BacktestRunner>();
             var runner = new BacktestRunner(provider, strategy, runnerLogger);
@@ -67,9 +75,20 @@ class Program
             var start = new DateTime(2015, 01, 01);
             var end = new DateTime(2015, 02, 01);
 
-            Console.WriteLine("--- Démarrage du moteur ---");
-
             runner.Run("EURUSD", start, end);
+
+            var result = portfolioManager.CurrentPortfolio;
+            double profit = result.Equity - result.InitialCash;
+            double returnPct = (profit / result.InitialCash) * 100;
+
+            Console.WriteLine("\n========================================");
+            Console.WriteLine("          RESULTATS DU BACKTEST         ");
+            Console.WriteLine("========================================");
+            Console.WriteLine($"Capital Initial : {result.InitialCash:C0}");
+            Console.WriteLine($"Capital Final   : {result.Equity:C2}");
+            Console.WriteLine($"PnL Net         : {profit:C2} ({returnPct:F2}%)");
+            Console.WriteLine($"Position Finale : {result.Position} lots");
+            Console.WriteLine("========================================");
         }
         catch (Exception ex)
         {
