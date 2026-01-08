@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Logging; // Nécessaire pour ILogger
+using Microsoft.Extensions.Logging; 
 
 namespace TradeSoft.Infrastructure.IO
 {

@@ -9,6 +9,8 @@ namespace TradeSoft.Core.Context
 
         public readonly List<Order> NewOrders = new List<Order>(10);
 
+        public readonly List<Trade> Trades = new List<Trade>(10);
+
         public bool IgnoreTick;
 
         /// <summary>
@@ -19,6 +21,7 @@ namespace TradeSoft.Core.Context
             Tick = tick;
             IgnoreTick = false;
             NewOrders.Clear();
+            Trades.Clear();
         }
     }
 }
