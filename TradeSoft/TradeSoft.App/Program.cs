@@ -1,9 +1,11 @@
 ﻿using Microsoft.Extensions.Logging;
 using TradeSoft.Core.Pipeline;
 using TradeSoft.Engine;
-using TradeSoft.Engine.Strategies;
 using TradeSoft.Engine.Management;
+using TradeSoft.Engine.Strategies;
 using TradeSoft.Infrastructure.IO;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using TradeSoft.Infrastructure.Processing;
 
 class Program
 {
@@ -28,9 +30,12 @@ class Program
         {
             // Louis
             @"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\EURUSD",
-            
-            // Chemin relatif standard (si le dossier Data est à la racine de la solution)
-            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD")),
+
+            //Alejandro
+            @"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
+
+			// Chemin relatif standard (si le dossier Data est à la racine de la solution)
+			Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD")),
             
         };
 
@@ -60,19 +65,25 @@ class Program
             // On démarre avec 100,000$
             var portfolioManager = new PortfolioManager(100_000);
 
-            Handler strategy = new RandomStrategy();
-            Handler broker = new TradeSoft.Engine.Execution.SimulatedBroker();
+			// A. On crée les maillons (dont ton nouvel agrégateur)
+			Handler aggregator = new BarAggregator();
+			Handler strategy = new RandomStrategy();
+			Handler broker = new TradeSoft.Engine.Execution.SimulatedBroker();
 
-            strategy.SetNext(broker);
-            broker.SetNext(portfolioManager);
+			// B. On définit l'ordre du pipeline (L'agrégateur est en premier !)
+			aggregator.SetNext(strategy);
+			strategy.SetNext(broker);
+			broker.SetNext(portfolioManager);
 
-            var runnerLogger = loggerFactory.CreateLogger<BacktestRunner>();
-            var runner = new BacktestRunner(provider, strategy, runnerLogger);
+			var runnerLogger = loggerFactory.CreateLogger<BacktestRunner>();
 
-            // ---------------------------------------------------------
-            // 4. Lancement du Backtest
-            // ---------------------------------------------------------
-            var start = new DateTime(2015, 01, 01);
+			// C. IMPORTANT : On donne "aggregator" au runner au lieu de "strategy"
+			var runner = new BacktestRunner(provider, aggregator, runnerLogger);
+
+			// ---------------------------------------------------------
+			// 4. Lancement du Backtest
+			// ---------------------------------------------------------
+			var start = new DateTime(2015, 01, 01);
             var end = new DateTime(2015, 02, 01);
 
             runner.Run("EURUSD", start, end);
