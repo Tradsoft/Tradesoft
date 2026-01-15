@@ -126,9 +126,11 @@ class Program
             Console.WriteLine("1) RSI (paramétrable)");
             Console.WriteLine("2) RandomStrategy");
             Console.WriteLine("3) RSI + RandomStrategy (router)");
+            Console.WriteLine("4) Moving Average Crossover");
+            Console.WriteLine("5) RSI + MAC (router)");
             Console.WriteLine("========================================");
 
-            int choice = ReadInt("Sélection (1-3) : ", min: 1, max: 3);
+            int choice = ReadInt("Sélection (1-5) : ", min: 1, max: 5);
 
             switch (choice)
             {
@@ -142,6 +144,14 @@ class Program
                     return new StrategyRouter(
                         CreateRsiFromMenu(),
                         new RandomStrategy()
+                    );
+                case 4:
+                    return CreateMovingAverageFromMenu();
+
+                case 5:
+                    return new StrategyRouter(
+                        CreateRsiFromMenu(),
+                        CreateMovingAverageFromMenu()
                     );
 
                 default:
@@ -166,6 +176,20 @@ class Program
         return new RSI(period, oversold, overbought, lot: 1.0, cooldown: TimeSpan.FromMinutes(1));
 
     }
+
+    private static Handler CreateMovingAverageFromMenu()
+    {
+        Console.WriteLine();
+        Console.WriteLine("========================================");
+        Console.WriteLine("   PARAMETRES MOVING AVERAGE CROSSOVER  ");
+        Console.WriteLine("========================================");
+
+        int shortPeriod = ReadInt("Période MA courte (défaut 20) : ",defaultValue: 20,min: 1,max: 10_000);
+        int longPeriod = ReadInt("Période MA longue (défaut 50) : ",defaultValue: 50,min: shortPeriod + 1,max: 10_000);
+        double lot = ReadDouble("Lot (défaut 0.01) : ",defaultValue: 0.01,minExclusive: 0,maxExclusive: double.MaxValue);
+        return new MovingAverageCrossover(shortPeriod: shortPeriod,longPeriod: longPeriod,lot: lot);
+    }
+
 
     private static int ReadInt(string prompt, int? defaultValue = null, int? min = null, int? max = null)
     {
