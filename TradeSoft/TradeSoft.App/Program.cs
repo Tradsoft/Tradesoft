@@ -38,6 +38,9 @@ class Program
             ///Pierre-Ugo
             @"C:\Users\Pc\Bureau\Projet\Data\EURUSD",
 
+            ///Inès 
+            @"C:\Users\inesm\OneDrive\Documents\M2\Tradesoft\Data\EURUSD",
+
             // Chemin relatif standard (si le dossier Data est à la racine de la solution)
             Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD")),
         };
@@ -119,18 +122,17 @@ class Program
     {
         while (true)
         {
-            Console.WriteLine();
-            Console.WriteLine("========================================");
-            Console.WriteLine("       MENU - CHOIX STRATEGIE           ");
             Console.WriteLine("========================================");
             Console.WriteLine("1) RSI (paramétrable)");
             Console.WriteLine("2) RandomStrategy");
             Console.WriteLine("3) RSI + RandomStrategy (router)");
             Console.WriteLine("4) Moving Average Crossover");
             Console.WriteLine("5) RSI + MAC (router)");
+            Console.WriteLine("6) Mean Reversion");
             Console.WriteLine("========================================");
 
-            int choice = ReadInt("Sélection (1-5) : ", min: 1, max: 5);
+            int choice = ReadInt("Sélection (1-6) : ", min: 1, max: 6);
+
 
             switch (choice)
             {
@@ -153,6 +155,10 @@ class Program
                         CreateRsiFromMenu(),
                         CreateMovingAverageFromMenu()
                     );
+
+                case 6:
+                    return CreateMeanReversionFromMenu();
+
 
                 default:
                     Console.WriteLine("Choix invalide.");
@@ -188,6 +194,42 @@ class Program
         int longPeriod = ReadInt("Période MA longue (défaut 50) : ",defaultValue: 50,min: shortPeriod + 1,max: 10_000);
         double lot = ReadDouble("Lot (défaut 0.01) : ",defaultValue: 0.01,minExclusive: 0,maxExclusive: double.MaxValue);
         return new MovingAverageCrossover(shortPeriod: shortPeriod,longPeriod: longPeriod,lot: lot);
+    }
+
+    private static Handler CreateMeanReversionFromMenu()
+    {
+        Console.WriteLine();
+        Console.WriteLine("========================================");
+        Console.WriteLine("        PARAMETRES MEAN REVERSION       ");
+        Console.WriteLine("========================================");
+
+        int period = ReadInt(
+            "Period (défaut 20) : ",
+            defaultValue: 20,
+            min: 2,
+            max: 10_000
+        );
+
+        double k = ReadDouble(
+            "Multiplicateur écart-type k (défaut 2.0) : ",
+            defaultValue: 2.0,
+            minExclusive: 0,
+            maxExclusive: 10
+        );
+
+        double lot = ReadDouble(
+            "Lot (défaut 1.0) : ",
+            defaultValue: 1.0,
+            minExclusive: 0,
+            maxExclusive: double.MaxValue
+        );
+
+        return new MeanReversion(
+            period: period,
+            k: k,
+            lot: lot,
+            cooldown: TimeSpan.FromMinutes(1)
+        );
     }
 
 
