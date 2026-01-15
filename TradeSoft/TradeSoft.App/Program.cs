@@ -129,9 +129,10 @@ class Program
             Console.WriteLine("4) Moving Average Crossover");
             Console.WriteLine("5) RSI + MAC (router)");
             Console.WriteLine("6) Mean Reversion");
+            Console.WriteLine("7) Breakout / Support-Resistance");
             Console.WriteLine("========================================");
 
-            int choice = ReadInt("Sélection (1-6) : ", min: 1, max: 6);
+            int choice = ReadInt("Sélection (1-7) : ", min: 1, max: 7);
 
 
             switch (choice)
@@ -158,6 +159,9 @@ class Program
 
                 case 6:
                     return CreateMeanReversionFromMenu();
+
+                case 7:
+                    return CreateBreakoutFromMenu();
 
 
                 default:
@@ -227,6 +231,34 @@ class Program
         return new MeanReversion(
             period: period,
             k: k,
+            lot: lot,
+            cooldown: TimeSpan.FromMinutes(1)
+        );
+    }
+
+    private static Handler CreateBreakoutFromMenu()
+    {
+        Console.WriteLine();
+        Console.WriteLine("========================================");
+        Console.WriteLine("   PARAMETRES BREAKOUT / SUPPORT-RES    ");
+        Console.WriteLine("========================================");
+
+        int lookback = ReadInt(
+            "Lookback period (défaut 20) : ",
+            defaultValue: 20,
+            min: 2,
+            max: 10_000
+        );
+
+        double lot = ReadDouble(
+            "Lot (défaut 1.0) : ",
+            defaultValue: 1.0,
+            minExclusive: 0,
+            maxExclusive: double.MaxValue
+        );
+
+        return new BreakoutSupportResistance(
+            lookback: lookback,
             lot: lot,
             cooldown: TimeSpan.FromMinutes(1)
         );
