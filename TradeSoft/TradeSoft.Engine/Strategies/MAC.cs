@@ -6,55 +6,23 @@ using TradeSoft.Core.Pipeline;
 
 namespace TradeSoft.Engine.Strategies
 {
-    /// <summary>
-    /// Moving Average Crossover Strategy (SMA)
-    ///
-    /// BUY  : MA courte croise AU-DESSUS de MA longue
-    /// EXIT : MA courte croise EN-DESSOUS de MA longue (long-only => pas de short)
-    ///
-    /// Sécurités intégrées :
-    /// - 1 décision max par minute (anti sur-trading tick)
-    /// - hystérésis (anti re-cross bruit)
-    /// - position cible (+lot / 0)
-    /// </summary>
     public sealed class MovingAverageCrossover : Handler
     {
         private readonly int _shortPeriod;
         private readonly int _longPeriod;
         private readonly double _lot;
 
-        // Fenêtres SMA
         private readonly Queue<double> _shortWindow = new();
         private readonly Queue<double> _longWindow = new();
 
-        // Précédentes valeurs MA
         private double? _prevShortMA;
         private double? _prevLongMA;
-
-        // Position interne
         private double _positionLots = 0.0;
-
-        // ---- Anti sur-trading : 1 décision / minute ----
-        private long _lastDecisionBucket = -1;
-        private readonly long _decisionBucketTicks = TimeSpan.FromMinutes(1).Ticks;
-
-        // ---- Hystérésis (EURUSD) ----
         private readonly double _epsilon = 0.00005;
 
-        public MovingAverageCrossover(
-            int shortPeriod = 20,
-            int longPeriod = 50,
-            double lot = 0.01)
+        public MovingAverageCrossover(int shortPeriod = 20, int longPeriod = 50, double lot = 0.01)
         {
-            if (shortPeriod <= 0)
-                throw new ArgumentOutOfRangeException(nameof(shortPeriod));
-
-            if (longPeriod <= shortPeriod)
-                throw new ArgumentException("Long period must be > short period.");
-
-            if (lot <= 0)
-                throw new ArgumentOutOfRangeException(nameof(lot));
-
+            if (longPeriod <= shortPeriod) throw new ArgumentException("Long > Short required");
             _shortPeriod = shortPeriod;
             _longPeriod = longPeriod;
             _lot = lot;
@@ -62,30 +30,22 @@ namespace TradeSoft.Engine.Strategies
 
         protected override void OnProcess(TickContext context)
         {
-            long ts = context.Tick.Timestamp;
+            // MODIF : On attend la bougie
+            if (context.GeneratedBar == null) return;
+            var bar = context.GeneratedBar;
 
-            // 1) Décision max 1 fois / minute
-            long bucket = ts / _decisionBucketTicks;
-            if (bucket == _lastDecisionBucket)
-                return;
+            double price = bar.Close;
+            long ts = bar.Timestamp.Ticks;
 
-            _lastDecisionBucket = bucket;
-
-            double price = context.Tick.Median;
-
-
-            // 2) Mise à jour des SMA
+            // Mise à jour des SMA
             UpdateWindow(_shortWindow, price, _shortPeriod);
             UpdateWindow(_longWindow, price, _longPeriod);
 
-            if (_shortWindow.Count < _shortPeriod || _longWindow.Count < _longPeriod)
-                return;
+            if (_shortWindow.Count < _shortPeriod || _longWindow.Count < _longPeriod) return;
 
             double shortMA = Average(_shortWindow);
             double longMA = Average(_longWindow);
 
-
-            // 3) Détection crossover
             if (_prevShortMA.HasValue && _prevLongMA.HasValue)
             {
                 double prevDiff = _prevShortMA.Value - _prevLongMA.Value;
@@ -100,7 +60,7 @@ namespace TradeSoft.Engine.Strategies
                 }
                 else if (bearishCross)
                 {
-                    // Long-only: on sort (flat) au lieu de shorter
+                    // Sortie de position (Flat)
                     SendToTarget(context, 0.0, price, "EXIT", shortMA, longMA, ts);
                 }
             }
@@ -109,22 +69,12 @@ namespace TradeSoft.Engine.Strategies
             _prevLongMA = longMA;
         }
 
-        // Ordres vers position cible
-        private void SendToTarget(
-            TickContext context,
-            double targetLots,
-            double price,
-            string label,
-            double shortMA,
-            double longMA,
-            long ts)
+        private void SendToTarget(TickContext context, double targetLots, double price, string label, double shortMA, double longMA, long ts)
         {
             double delta = targetLots - _positionLots;
-            if (Math.Abs(delta) < 1e-12)
-                return;
+            if (Math.Abs(delta) < 1e-12) return;
 
             Side side = delta > 0 ? Side.Buy : Side.Sell;
-
             context.NewOrders.Add(new Order
             {
                 Id = DateTime.UtcNow.Ticks,
@@ -136,33 +86,21 @@ namespace TradeSoft.Engine.Strategies
             });
 
             _positionLots = targetLots;
-
-            Console.WriteLine(
-                $"[MA CROSS] {label} | MA{_shortPeriod}={shortMA:F5} " +
-                $"MA{_longPeriod}={longMA:F5} | Target={targetLots:+0.##;-0.##;0} | {new DateTime(ts)}"
-            );
+            Console.WriteLine($"[MA CROSS] {label} | MA{_shortPeriod}={shortMA:F5} MA{_longPeriod}={longMA:F5} | {new DateTime(ts):HH:mm}");
         }
 
-        // Utils SMA
         private static void UpdateWindow(Queue<double> window, double value, int maxSize)
         {
             window.Enqueue(value);
-            if (window.Count > maxSize)
-                window.Dequeue();
+            if (window.Count > maxSize) window.Dequeue();
         }
 
         private static double Average(IEnumerable<double> values)
         {
             double sum = 0;
             int count = 0;
-
-            foreach (var v in values)
-            {
-                sum += v;
-                count++;
-            }
-
-            return sum / count;
+            foreach (var v in values) { sum += v; count++; }
+            return count == 0 ? 0 : sum / count;
         }
     }
 }

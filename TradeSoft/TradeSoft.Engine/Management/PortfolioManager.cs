@@ -34,7 +34,7 @@ namespace TradeSoft.Engine.Management
 
             // 2. Mettre à jour la valeur du portefeuille avec le prix actuel du tick
             // (Mark-to-Market)
-            _portfolio.MarkToMarket(context.Tick.Median);
+            _portfolio.MarkToMarket(context.Tick.MidPrice);
 
             // 3. Enregistrement de la courbe (Sampling)
             // On enregistre si un trade a eu lieu OU si c'est la fin de la journée (simplifié ici à chaque trade pour l'exemple)

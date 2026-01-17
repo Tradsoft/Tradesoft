@@ -7,6 +7,8 @@ namespace TradeSoft.Core.Context
     {
         public TickData Tick;
 
+        public Bar? GeneratedBar;
+
         public readonly List<Order> NewOrders = new List<Order>(10);
 
         public readonly List<Trade> Trades = new List<Trade>(10);
@@ -19,6 +21,7 @@ namespace TradeSoft.Core.Context
         public void Reset(TickData tick)
         {
             Tick = tick;
+            GeneratedBar = null;
             IgnoreTick = false;
             NewOrders.Clear();
             Trades.Clear();
