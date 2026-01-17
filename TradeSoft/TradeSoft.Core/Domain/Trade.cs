@@ -10,6 +10,6 @@
         public double Commission { get; set; }
 
         public override string ToString()
-            => $"[EXECUTION] {Side} {Quantity} @ {Price} (Time: {new System.DateTime(Timestamp):HH:mm:ss.fff})";
+			=> $"[EXECUTION] {Side} {Quantity} @ {Price} (Time: {new System.DateTime(Timestamp):yyyy-MM-dd HH:mm:ss.fff})";
     }
 }

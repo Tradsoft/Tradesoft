@@ -25,6 +25,7 @@ namespace TradeSoft.Engine.Execution
             {
                 _networkQueue.Enqueue((currentKw + _latencyTicks, order));
             }
+            context.NewOrders.Clear();
 
             // 2. RECEPTION RESEAU (Network -> Order Book)
             while (_networkQueue.Count > 0 && _networkQueue.Peek().ArrivalTime <= currentKw)

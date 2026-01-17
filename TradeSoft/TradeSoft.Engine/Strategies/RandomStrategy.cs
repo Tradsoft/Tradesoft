@@ -7,30 +7,33 @@ namespace TradeSoft.Engine.Strategies
 {
     public class RandomStrategy : Handler
     {
-        private int _counter = 0;
+        private Random _rnd = new Random();
 
         protected override void OnProcess(TickContext context)
         {
-            _counter++;
 
-            if (_counter >= 100000)
+            if (context.GeneratedBar == null)
             {
-                // Création d'un ordre
+                return;
+            }
+
+            var bar = context.GeneratedBar;
+
+            if (_rnd.Next(0, 10) == 0)
+            {
                 var order = new Order
                 {
-                    Id = DateTime.Now.Ticks, 
+                    Id = DateTime.Now.Ticks,
                     Timestamp = context.Tick.Timestamp,
                     Side = Side.Buy,
                     Quantity = 1.0,
                     Type = OrderType.Market,
-                    Price = context.Tick.Median 
+
+                    Price = bar.Close
                 };
 
                 context.NewOrders.Add(order);
-
-                _counter = 0;
-
-                Console.WriteLine($"[STRATEGY] Signal d'achat généré à {new DateTime(context.Tick.Timestamp)}");
+                Console.WriteLine($"[STRATEGY] Achat sur bougie {bar.Timestamp:HH:mm} à {bar.Close}");
             }
         }
     }
