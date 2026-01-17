@@ -5,54 +5,55 @@ using TradeSoft.Core.Pipeline;
 
 namespace TradeSoft.Infrastructure.Processing
 {
-	public class BarAggregator : Handler
-	{
-		private Bar? _currentBar;
-		private DateTime? _nextPeriod;
-		private readonly TimeSpan _period = TimeSpan.FromMinutes(1);
+    public class BarAggregator : Handler
+    {
+        private Bar? _currentBar;
+        private DateTime _nextPeriodClose;
+        private readonly TimeSpan _timeframe = TimeSpan.FromMinutes(1);
 
-		protected override void OnProcess(TickContext context)
-		{
-			// On récupère le temps du tick (le timestamp est en Ticks .NET)
-			DateTime tickTime = new DateTime(context.Tick.Timestamp);
-			double price = context.Tick.Median;
+        protected override void OnProcess(TickContext context)
+        {
+            DateTime tickTime = new DateTime(context.Tick.Timestamp);
+            double price = context.Tick.MidPrice; 
 
-			// 1. Détection du changement de minute
-			if (_nextPeriod == null || tickTime >= _nextPeriod)
-			{
-				// Si on finit une bougie, on peut l'afficher pour le debug
-				if (_currentBar != null)
-				{
-					// DECOMMENTER LES LIGNES CI-DESSOUS POUR VOIR LES LOGS DANS LA CONSOLE
-					 //Console.ForegroundColor = ConsoleColor.Cyan;
-					 //Console.WriteLine(_currentBar.ToString());
-					 //Console.ResetColor();
-				}
+            if (_currentBar == null)
+            {
+                StartNewBar(tickTime, price, context.Tick.Volume);
+                return;
+            }
 
-				// On arrondit au début de la minute (ex: 10:05:42 -> 10:05:00)
-				DateTime barStart = new DateTime(tickTime.Year, tickTime.Month, tickTime.Day,
-												tickTime.Hour, tickTime.Minute, 0);
+            if (tickTime >= _nextPeriodClose)
+            {
+                context.GeneratedBar = _currentBar;
 
-				_currentBar = new Bar
-				{
-					Timestamp = barStart,
-					Open = price,
-					High = price,
-					Low = price,
-					Close = price,
-					Volume = context.Tick.Volume
-				};
+                StartNewBar(tickTime, price, context.Tick.Volume);
+            }
+            else
+            {
+                if (price > _currentBar.High) _currentBar.High = price;
+                if (price < _currentBar.Low) _currentBar.Low = price;
 
-				_nextPeriod = barStart.Add(_period);
-			}
-			else
-			{
-				// 2. Mise à jour de la bougie en cours (High, Low, Close)
-				if (price > _currentBar!.High) _currentBar.High = price;
-				if (price < _currentBar.Low) _currentBar.Low = price;
-				_currentBar.Close = price;
-				_currentBar.Volume += context.Tick.Volume;
-			}
-		}
-	}
+                _currentBar.Close = price;
+                _currentBar.Volume += context.Tick.Volume;
+            }
+        }
+
+        private void StartNewBar(DateTime tickTime, double price, int volume)
+        {
+            var barTime = new DateTime(tickTime.Year, tickTime.Month, tickTime.Day,
+                                     tickTime.Hour, tickTime.Minute, 0);
+
+            _currentBar = new Bar
+            {
+                Timestamp = barTime,
+                Open = price,
+                High = price,
+                Low = price,
+                Close = price,
+                Volume = volume
+            };
+
+            _nextPeriodClose = barTime.Add(_timeframe);
+        }
+    }
 }

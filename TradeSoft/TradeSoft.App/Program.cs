@@ -1,20 +1,22 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System;
+using System.IO;
+using System.Linq;
+using Microsoft.Extensions.Logging;
 using TradeSoft.Core.Pipeline;
 using TradeSoft.Engine;
 using TradeSoft.Engine.Execution;
 using TradeSoft.Engine.Management;
 using TradeSoft.Engine.Strategies;
 using TradeSoft.Infrastructure.IO;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 using TradeSoft.Infrastructure.Processing;
 
 class Program
 {
     static void Main(string[] args)
     {
-        // ---------------------------------------------------------
-        // 1. Configuration du Logger
-        // ---------------------------------------------------------
+        // =========================================================
+        // 1. CONFIGURATION DU LOGGER
+        // =========================================================
         using ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
         {
             builder
@@ -24,24 +26,20 @@ class Program
                 .SetMinimumLevel(LogLevel.Information);
         });
 
-        // ---------------------------------------------------------
-        // 2. Configuration du Chemin des Données
-        // ---------------------------------------------------------
+        // =========================================================
+        // 2. CONFIGURATION DES CHEMINS DE DONNÉES
+        // =========================================================
         string[] cheminsPossibles = new[]
         {
             // Louis
             @"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\EURUSD",
-
-            //Alejandro
+            // Alejandro
             @"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
-
-            ///Pierre-Ugo
+            // Pierre-Ugo
             @"C:\Users\Pc\Bureau\Projet\Data\EURUSD",
-
-            ///Inès 
+            // Inès 
             @"C:\Users\inesm\OneDrive\Documents\M2\Tradesoft\Data\EURUSD",
-
-            // Chemin relatif standard (si le dossier Data est à la racine de la solution)
+            // Relatif standard
             Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD")),
         };
 
@@ -50,7 +48,7 @@ class Program
         if (string.IsNullOrEmpty(dossierData))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Aucune donnée trouvée !");
+            Console.WriteLine("ERREUR : Aucune donnée trouvée !");
             Console.WriteLine("Chemins testés :");
             foreach (var p in cheminsPossibles) Console.WriteLine($" - {p}");
             Console.ResetColor();
@@ -61,48 +59,51 @@ class Program
 
         try
         {
-            // ---------------------------------------------------------
-            // 3. Initialisation des Composants (Dependency Injection manuelle)
-            // ---------------------------------------------------------
+            // =========================================================
+            // 3. INITIALISATION DU PIPELINE (Dependency Injection)
+            // =========================================================
 
+            // A. Infrastructure Données
             var providerLogger = loggerFactory.CreateLogger<MultiFileTickProvider>();
             var provider = new MultiFileTickProvider(dossierData, providerLogger);
 
-            // On démarre avec 100,000$
+            // B. Gestionnaire de Portefeuille (100k départ)
             var portfolioManager = new PortfolioManager(100_000);
 
-            // A. On crée les maillons (dont ton nouvel agrégateur)
-            Handler aggregator = new BarAggregator();
+            // C. Construction de la Chaîne de Responsabilité
+            // Ordre : Aggregator -> Strategy -> Broker -> Portfolio
 
-            // Menu de sélection de stratégie (et paramètres si nécessaire)
-            Handler strategy = CreateStrategyFromMenu();
+            Handler aggregator = new BarAggregator();       // Transforme Ticks en Bars
+            Handler strategy = CreateStrategyFromMenu();    // Décide (Buy/Sell) sur Bars
+            Handler broker = new SimulatedBroker();         // Exécute (au prix Tick)
 
-            Handler broker = new SimulatedBroker();
-
-            // B. On définit l'ordre du pipeline (L'agrégateur est en premier !)
             aggregator.SetNext(strategy);
             strategy.SetNext(broker);
             broker.SetNext(portfolioManager);
 
+            // D. Moteur de Backtest
             var runnerLogger = loggerFactory.CreateLogger<BacktestRunner>();
-
-            // C. IMPORTANT : On donne "aggregator" au runner au lieu de "strategy"
+            // NOTE IMPORTANTE : On donne la TÊTE de la chaîne (aggregator) au runner
             var runner = new BacktestRunner(provider, aggregator, runnerLogger);
 
-            // ---------------------------------------------------------
-            // 4. Lancement du Backtest
-            // ---------------------------------------------------------
+            // =========================================================
+            // 4. LANCEMENT DU BACKTEST
+            // =========================================================
             var start = new DateTime(2015, 01, 01);
             var end = new DateTime(2015, 02, 01);
 
+            Console.WriteLine($"--- Démarrage du moteur ({start:d} au {end:d}) ---");
             runner.Run("EURUSD", start, end);
 
+            // =========================================================
+            // 5. AFFICHAGE DES RÉSULTATS
+            // =========================================================
             var result = portfolioManager.CurrentPortfolio;
             double profit = result.Equity - result.InitialCash;
             double returnPct = (profit / result.InitialCash) * 100;
 
             Console.WriteLine("\n========================================");
-            Console.WriteLine("          RESULTATS DU BACKTEST         ");
+            Console.WriteLine("          RÉSULTATS DU BACKTEST         ");
             Console.WriteLine("========================================");
             Console.WriteLine($"Capital Initial : {result.InitialCash:C0}");
             Console.WriteLine($"Capital Final   : {result.Equity:C2}");
@@ -118,183 +119,91 @@ class Program
         }
     }
 
+    // =========================================================
+    // MENU UTILISATEUR & FACTORIES
+    // =========================================================
+
     private static Handler CreateStrategyFromMenu()
     {
         while (true)
         {
-            Console.WriteLine("========================================");
+            Console.WriteLine("\n--- CHOIX DE LA STRATÉGIE ---");
             Console.WriteLine("1) RSI (paramétrable)");
             Console.WriteLine("2) RandomStrategy");
-            Console.WriteLine("3) RSI + RandomStrategy (router)");
+            Console.WriteLine("3) RSI + RandomStrategy (Router)");
             Console.WriteLine("4) Moving Average Crossover");
-            Console.WriteLine("5) RSI + MAC (router)");
+            Console.WriteLine("5) RSI + MA Crossover (Router)");
             Console.WriteLine("6) Mean Reversion");
             Console.WriteLine("7) Breakout / Support-Resistance");
-            Console.WriteLine("========================================");
+            Console.WriteLine("-----------------------------");
 
             int choice = ReadInt("Sélection (1-7) : ", min: 1, max: 7);
 
-
             switch (choice)
             {
-                case 1:
-                    return CreateRsiFromMenu();
-
-                case 2:
-                    return new RandomStrategy();
-
-                case 3:
-                    return new StrategyRouter(
-                        CreateRsiFromMenu(),
-                        new RandomStrategy()
-                    );
-                case 4:
-                    return CreateMovingAverageFromMenu();
-
-                case 5:
-                    return new StrategyRouter(
-                        CreateRsiFromMenu(),
-                        CreateMovingAverageFromMenu()
-                    );
-
-                case 6:
-                    return CreateMeanReversionFromMenu();
-
-                case 7:
-                    return CreateBreakoutFromMenu();
-
-
-                default:
-                    Console.WriteLine("Choix invalide.");
-                    break;
+                case 1: return CreateRsiFromMenu();
+                case 2: return new RandomStrategy();
+                case 3: return new StrategyRouter(CreateRsiFromMenu(), new RandomStrategy());
+                case 4: return CreateMovingAverageFromMenu();
+                case 5: return new StrategyRouter(CreateRsiFromMenu(), CreateMovingAverageFromMenu());
+                case 6: return CreateMeanReversionFromMenu();
+                case 7: return CreateBreakoutFromMenu();
+                default: Console.WriteLine("Choix invalide."); break;
             }
         }
     }
 
     private static Handler CreateRsiFromMenu()
     {
-        Console.WriteLine();
-        Console.WriteLine("========================================");
-        Console.WriteLine("         PARAMETRES RSI                 ");
-        Console.WriteLine("========================================");
-
-        int period = ReadInt("Period (défaut 14) : ", defaultValue: 14, min: 2, max: 10_000);
-        double oversold = ReadDouble("Oversold (défaut 30) : ", defaultValue: 30, minExclusive: 0, maxExclusive: 100);
-        double overbought = ReadDouble("Overbought (défaut 70) : ", defaultValue: 70, minExclusive: 0, maxExclusive: 100);
-        double quantity = ReadDouble("Quantity (défaut 1.0) : ", defaultValue: 1.0, minExclusive: 0, maxExclusive: double.MaxValue);
-
-        return new RSI(period, oversold, overbought, lot: 1.0, cooldown: TimeSpan.FromMinutes(1));
-
+        Console.WriteLine("\n[PARAMÈTRES RSI]");
+        int period = ReadInt("Period (défaut 14) : ", 14, 2, 1000);
+        double oversold = ReadDouble("Oversold (défaut 30) : ", 30, 0, 100);
+        double overbought = ReadDouble("Overbought (défaut 70) : ", 70, 0, 100);
+        // Note : Le cooldown est géré par le BarAggregator (1 bougie/min), on ne le passe plus
+        return new RSI(period, oversold, overbought, lot: 1.0);
     }
 
     private static Handler CreateMovingAverageFromMenu()
     {
-        Console.WriteLine();
-        Console.WriteLine("========================================");
-        Console.WriteLine("   PARAMETRES MOVING AVERAGE CROSSOVER  ");
-        Console.WriteLine("========================================");
-
-        int shortPeriod = ReadInt("Période MA courte (défaut 20) : ",defaultValue: 20,min: 1,max: 10_000);
-        int longPeriod = ReadInt("Période MA longue (défaut 50) : ",defaultValue: 50,min: shortPeriod + 1,max: 10_000);
-        double lot = ReadDouble("Lot (défaut 0.01) : ",defaultValue: 0.01,minExclusive: 0,maxExclusive: double.MaxValue);
-        return new MovingAverageCrossover(shortPeriod: shortPeriod,longPeriod: longPeriod,lot: lot);
+        Console.WriteLine("\n[PARAMÈTRES MA CROSSOVER]");
+        int shortP = ReadInt("MA courte (défaut 20) : ", 20, 1, 1000);
+        int longP = ReadInt("MA longue (défaut 50) : ", 50, shortP + 1, 5000);
+        double lot = ReadDouble("Lot (défaut 0.01) : ", 0.01, 0, 100);
+        return new MovingAverageCrossover(shortP, longP, lot);
     }
 
     private static Handler CreateMeanReversionFromMenu()
     {
-        Console.WriteLine();
-        Console.WriteLine("========================================");
-        Console.WriteLine("        PARAMETRES MEAN REVERSION       ");
-        Console.WriteLine("========================================");
-
-        int period = ReadInt(
-            "Period (défaut 20) : ",
-            defaultValue: 20,
-            min: 2,
-            max: 10_000
-        );
-
-        double k = ReadDouble(
-            "Multiplicateur écart-type k (défaut 2.0) : ",
-            defaultValue: 2.0,
-            minExclusive: 0,
-            maxExclusive: 10
-        );
-
-        double lot = ReadDouble(
-            "Lot (défaut 1.0) : ",
-            defaultValue: 1.0,
-            minExclusive: 0,
-            maxExclusive: double.MaxValue
-        );
-
-        return new MeanReversion(
-            period: period,
-            k: k,
-            lot: lot,
-            cooldown: TimeSpan.FromMinutes(1)
-        );
+        Console.WriteLine("\n[PARAMÈTRES MEAN REVERSION]");
+        int period = ReadInt("Period (défaut 20) : ", 20, 2, 1000);
+        double k = ReadDouble("Multiplicateur K (défaut 2.0) : ", 2.0, 0, 10);
+        double lot = ReadDouble("Lot (défaut 1.0) : ", 1.0, 0, 100);
+        return new MeanReversion(period, k, lot);
     }
 
     private static Handler CreateBreakoutFromMenu()
     {
-        Console.WriteLine();
-        Console.WriteLine("========================================");
-        Console.WriteLine("   PARAMETRES BREAKOUT / SUPPORT-RES    ");
-        Console.WriteLine("========================================");
-
-        int lookback = ReadInt(
-            "Lookback period (défaut 20) : ",
-            defaultValue: 20,
-            min: 2,
-            max: 10_000
-        );
-
-        double lot = ReadDouble(
-            "Lot (défaut 1.0) : ",
-            defaultValue: 1.0,
-            minExclusive: 0,
-            maxExclusive: double.MaxValue
-        );
-
-        return new BreakoutSupportResistance(
-            lookback: lookback,
-            lot: lot,
-            cooldown: TimeSpan.FromMinutes(1)
-        );
+        Console.WriteLine("\n[PARAMÈTRES BREAKOUT]");
+        int lookback = ReadInt("Lookback period (défaut 20) : ", 20, 2, 1000);
+        double lot = ReadDouble("Lot (défaut 1.0) : ", 1.0, 0, 100);
+        return new BreakoutSupportResistance(lookback, lot);
     }
 
+    // =========================================================
+    // HELPERS INPUT CONSOLE
+    // =========================================================
 
     private static int ReadInt(string prompt, int? defaultValue = null, int? min = null, int? max = null)
     {
         while (true)
         {
             Console.Write(prompt);
-
             string? input = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(input) && defaultValue.HasValue)
-            {
-                return defaultValue.Value;
-            }
 
-            if (!int.TryParse(input, out int value))
-            {
-                Console.WriteLine("Veuillez saisir un nombre entier valide.");
-                continue;
-            }
-
-            if (min.HasValue && value < min.Value)
-            {
-                Console.WriteLine($"Valeur invalide (min={min.Value}).");
-                continue;
-            }
-
-            if (max.HasValue && value > max.Value)
-            {
-                Console.WriteLine($"Valeur invalide (max={max.Value}).");
-                continue;
-            }
-
+            if (string.IsNullOrWhiteSpace(input) && defaultValue.HasValue) return defaultValue.Value;
+            if (!int.TryParse(input, out int value)) { Console.WriteLine("Entier invalide."); continue; }
+            if (min.HasValue && value < min.Value) { Console.WriteLine($"Min requis : {min.Value}"); continue; }
+            if (max.HasValue && value > max.Value) { Console.WriteLine($"Max requis : {max.Value}"); continue; }
             return value;
         }
     }
@@ -304,31 +213,12 @@ class Program
         while (true)
         {
             Console.Write(prompt);
-
             string? input = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(input) && defaultValue.HasValue)
-            {
-                return defaultValue.Value;
-            }
 
-            if (!double.TryParse(input, out double value))
-            {
-                Console.WriteLine("Veuillez saisir un nombre valide (ex: 1.5).");
-                continue;
-            }
-
-            if (minExclusive.HasValue && value <= minExclusive.Value)
-            {
-                Console.WriteLine($"Valeur invalide (> {minExclusive.Value}).");
-                continue;
-            }
-
-            if (maxExclusive.HasValue && value >= maxExclusive.Value)
-            {
-                Console.WriteLine($"Valeur invalide (< {maxExclusive.Value}).");
-                continue;
-            }
-
+            if (string.IsNullOrWhiteSpace(input) && defaultValue.HasValue) return defaultValue.Value;
+            if (!double.TryParse(input, out double value)) { Console.WriteLine("Nombre invalide."); continue; }
+            if (minExclusive.HasValue && value <= minExclusive.Value) { Console.WriteLine($"Doit être > {minExclusive.Value}"); continue; }
+            if (maxExclusive.HasValue && value >= maxExclusive.Value) { Console.WriteLine($"Doit être < {maxExclusive.Value}"); continue; }
             return value;
         }
     }

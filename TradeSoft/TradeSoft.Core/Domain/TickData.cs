@@ -12,7 +12,7 @@ namespace TradeSoft.Core.Domain
         public readonly TickFlags Flags;// 1 octet
 
         public bool IsTrade => (Flags & TickFlags.Trade) != 0;
-        public double Median => (Bid + Ask) / 2.0;
+        public double MidPrice => (Bid + Ask) / 2.0;
     }
 
     [Flags]
