@@ -11,6 +11,11 @@ namespace TradeSoft.Infrastructure.Processing
         private DateTime _nextPeriodClose;
         private readonly TimeSpan _timeframe = TimeSpan.FromMinutes(1);
 
+        public BarAggregator(TimeSpan timeframe)
+        {
+            _timeframe = timeframe;
+        }
+
         protected override void OnProcess(TickContext context)
         {
             DateTime tickTime = new DateTime(context.Tick.Timestamp);
