@@ -9,7 +9,7 @@ namespace TradeSoft.Core.Services
     {
         Task<BacktestResult> RunBacktestAsync(
             BacktestConfig config,
-            IProgress<float> progress = null,
+            IProgress<float>? progress = null,
             CancellationToken cancellationToken = default
         );
     }

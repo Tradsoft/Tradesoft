@@ -18,6 +18,7 @@
         public double CommissionPerLot { get; set; } = 2.5;
         public CommissionType CommissionType { get; set; } = CommissionType.Fixed;
         public double SlippagePips { get; set; } = 0.0;
+        public double TickSize { get; set; } = 0.0001;
 
         public double MaxRiskPerTradePercent { get; set; } = 1.0; 
         public double MaxDrawdownPercent { get; set; } = 10.0;    
