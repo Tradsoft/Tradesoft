@@ -29,13 +29,13 @@ namespace TradeSoft.Engine.Services
 
         public async Task<BacktestResult> RunBacktestAsync(
             BacktestConfig config,
-            IProgress<float> progress = null,
+            IProgress<float>? progress = null,
             CancellationToken cancellationToken = default)
         {
             return await Task.Run(() =>
             {
                 var portfolioManager = new PortfolioManager(config.InitialCash);
-                var broker = new SimulatedBroker();
+                var broker = new SimulatedBroker(config);
                 var aggregator = new BarAggregator(config.Timeframe);
 
                 Handler strategy = CreateStrategy(config);
