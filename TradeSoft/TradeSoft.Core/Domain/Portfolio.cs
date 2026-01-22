@@ -3,37 +3,87 @@
     public class Portfolio
     {
         public double InitialCash { get; }
-        public double Cash { get; private set; }
-        public double Position { get; private set; }
-
-        // Valeur latente (Cash + valeur de revente immédiate de la position)
-        public double Equity { get; private set; }
-
+        public double Balance { get; private set; }
+        public List<Position> Positions { get; private set; } = new List<Position>();
+        public List<ClosedTrade> History { get; private set; } = new List<ClosedTrade>();
+        public double Equity => Balance + Positions.Sum(p => p.UnrealizedPnL);
         public Portfolio(double startingCash)
         {
             InitialCash = startingCash;
-            Cash = startingCash;
+            Balance = startingCash;
         }
 
         public void OnTrade(Trade trade)
         {
-            // Si on achète, le Cash diminue. Si on vend, le Cash augmente.
-            // (Approche simplifiée sans gestion de marge pour l'instant)
-            if (trade.Side == Side.Buy)
+            Balance -= trade.Commission;
+
+            double qtyRemainingToProcess = trade.Quantity;
+
+            var oppositeSide = trade.Side == Side.Buy ? Side.Sell : Side.Buy;
+
+            var oppositePositions = Positions
+                .Where(p => p.Side == oppositeSide)
+                .OrderBy(p => p.EntryTime)
+                .ToList();
+
+            foreach (var pos in oppositePositions)
             {
-                Cash -= (trade.Price * trade.Quantity) + trade.Commission;
-                Position += trade.Quantity;
+                if (qtyRemainingToProcess <= 0) break;
+
+                double qtyToClose = Math.Min(pos.Quantity, qtyRemainingToProcess);
+
+                double grossPnL = 0;
+                if (pos.Side == Side.Buy)
+                    grossPnL = (trade.Price - pos.EntryPrice) * qtyToClose;
+                else
+                    grossPnL = (pos.EntryPrice - trade.Price) * qtyToClose;
+
+                Balance += grossPnL;
+
+                double entryComm = trade.Commission * (qtyToClose / trade.Quantity);
+
+                var closedTrade = new ClosedTrade
+                {
+                    Symbol = pos.Symbol,
+                    Direction = pos.Side,
+                    EntryPrice = pos.EntryPrice,
+                    ExitPrice = trade.Price,
+                    Quantity = qtyToClose,
+                    EntryTime = pos.EntryTime,
+                    ExitTime = new DateTime(trade.Timestamp),
+                    PnL = grossPnL, 
+                    Commission = entryComm 
+                };
+                History.Add(closedTrade);
+
+                pos.Quantity -= qtyToClose;
+                qtyRemainingToProcess -= qtyToClose;
+
+                if (pos.Quantity <= 0.000001)
+                {
+                    Positions.Remove(pos);
+                }
             }
-            else
+
+            if (qtyRemainingToProcess > 0)
             {
-                Cash += (trade.Price * trade.Quantity) - trade.Commission;
-                Position -= trade.Quantity;
+                var newPos = new Position
+                {
+                    Id = trade.OrderId,
+                    Symbol = trade.Symbol,
+                    Side = trade.Side,
+                    Quantity = qtyRemainingToProcess,
+                    EntryPrice = trade.Price,
+                    EntryTime = new DateTime(trade.Timestamp),
+                    CurrentPrice = trade.Price
+                };
+                Positions.Add(newPos);
             }
         }
 
         public void MarkToMarket(double currentPrice)
         {
-            Equity = Cash + (Position * currentPrice);
+            foreach (var pos in Positions) pos.CurrentPrice = currentPrice;
         }
     }
 }

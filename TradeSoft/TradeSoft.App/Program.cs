@@ -1,4 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using TradeSoft.Core.DTO;
 using TradeSoft.Core.Services;
 using TradeSoft.Engine.Services;
@@ -38,6 +43,9 @@ class Program
         {
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("ERREUR : Aucune donnée trouvée !");
+            Console.WriteLine("Chemins testés :");
+            foreach (var p in cheminsPossibles) Console.WriteLine($" - {p}");
+            Console.ResetColor();
             return;
         }
 
@@ -76,12 +84,27 @@ class Program
 
                 Timeframe = timeframe,
                 Strategy = stratType,
-                StrategyParameters = stratParams // Assurez-vous d'avoir ajouté ce champ dans BacktestConfig
+                StrategyParameters = stratParams,
+
+                // Valeurs par défaut pour le risque (peuvent être surchargées par ConfigureRisk)
+                MaxRiskPerTradePercent = 1.0,
+                MaxDrawdownPercent = 10.0,
+                MaxDailyLossPercent = 5.0,
+                MaxConcurrentPositions = 5,
+                MinRiskRewardRatio = 1.0,
+
+                // Réalisme par défaut
+                CommissionPerLot = 2.5,
+                SlippagePips = 0.0
             };
+
+            // D. Configuration Avancée du Risque (Optionnel)
+            ConfigureRisk(config);
 
             Console.WriteLine($"\n--- PRÊT À LANCER LE BACKTEST ---");
             Console.WriteLine($"Stratégie : {config.Strategy}");
             Console.WriteLine($"Timeframe : {config.Timeframe}");
+            Console.WriteLine($"Capital   : {config.InitialCash:C0}");
             Console.WriteLine("Appuyez sur ENTRÉE pour démarrer...");
             Console.ReadLine();
 
@@ -99,7 +122,7 @@ class Program
             BacktestResult result = await service.RunBacktestAsync(config, progress);
 
             // =========================================================
-            // 6. AFFICHAGE DES RÉSULTATS
+            // 6. AFFICHAGE DES RÉSULTATS (KPIs)
             // =========================================================
             Console.WriteLine("\n\n========================================");
             Console.WriteLine("          RÉSULTATS DU BACKTEST         ");
@@ -107,7 +130,11 @@ class Program
             Console.WriteLine($"Capital Initial : {result.InitialCash:C0}");
             Console.WriteLine($"Capital Final   : {result.FinalEquity:C2}");
             Console.WriteLine($"PnL Net         : {result.NetProfit:C2} ({result.ReturnPercent:F2}%)");
+            Console.WriteLine("----------------------------------------");
             Console.WriteLine($"Total Trades    : {result.TotalTrades}");
+            Console.WriteLine($"Win Rate        : {result.WinRate:F2}%");
+            Console.WriteLine($"Profit Factor   : {result.ProfitFactor:F2}");
+            Console.WriteLine($"Max Drawdown    : {result.MaxDrawdownPercent:F2}%");
             Console.WriteLine("========================================");
 
         }
@@ -194,6 +221,24 @@ class Program
             default:
                 return (StrategyType.Random, paramsDict);
         }
+    }
+
+    private static void ConfigureRisk(BacktestConfig config)
+    {
+        Console.WriteLine("\n--- CONFIGURATION RISQUE (Avancé) ---");
+        Console.WriteLine("Voulez-vous modifier les paramètres de risque par défaut ? (o/n)");
+        string? resp = Console.ReadLine();
+
+        if (resp?.ToLower() != "o") return;
+
+        config.InitialCash = ReadDouble($"Capital Initial [Defaut {config.InitialCash}] : ", config.InitialCash);
+        config.MaxRiskPerTradePercent = ReadDouble($"Risque par Trade % [Defaut {config.MaxRiskPerTradePercent}] : ", config.MaxRiskPerTradePercent);
+        config.MaxDailyLossPercent = ReadDouble($"Perte Max Jour % [Defaut {config.MaxDailyLossPercent}] : ", config.MaxDailyLossPercent);
+        config.MaxDrawdownPercent = ReadDouble($"Max Drawdown % [Defaut {config.MaxDrawdownPercent}] : ", config.MaxDrawdownPercent);
+        config.MaxConcurrentPositions = ReadInt($"Max Positions Simultanées [Defaut {config.MaxConcurrentPositions}] : ", config.MaxConcurrentPositions);
+
+        config.SlippagePips = ReadDouble($"Simulation Slippage (Pips) [Defaut {config.SlippagePips}] : ", config.SlippagePips);
+        config.CommissionPerLot = ReadDouble($"Commission ($/Lot) [Defaut {config.CommissionPerLot}] : ", config.CommissionPerLot);
     }
 
     private static int ReadInt(string prompt, int? defaultValue = null, int? min = null, int? max = null)

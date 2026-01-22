@@ -30,7 +30,6 @@ namespace TradeSoft.Engine.Execution
             double bid = context.Tick.Bid;
             double ask = context.Tick.Ask;
 
-            // 1. LATENCE RÉSEAU
             foreach (var order in context.NewOrders)
             {
                 _networkQueue.Enqueue((currentKw + _latencyTicks, order));
@@ -43,21 +42,21 @@ namespace TradeSoft.Engine.Execution
                 _activeOrders.Add(item.Order);
             }
 
-            // 2. GESTION SL / TP
-            // Correction du risque de null sur exitOrder.Comment dans la gestion SL/TP
             for (int i = _pendingExits.Count - 1; i >= 0; i--)
             {
+                if (i >= _pendingExits.Count) continue;
+
                 var exitOrder = _pendingExits[i];
                 bool triggered = false;
 
                 if (!string.IsNullOrEmpty(exitOrder.Comment))
                 {
-                    if (exitOrder.Side == Side.Sell) // Sortie d'un Long
+                    if (exitOrder.Side == Side.Sell) 
                     {
                         if (exitOrder.Comment.Contains("SL") && bid <= exitOrder.Price) triggered = true;
                         else if (exitOrder.Comment.Contains("TP") && bid >= exitOrder.Price) triggered = true;
                     }
-                    else // Sortie d'un Short
+                    else 
                     {
                         if (exitOrder.Comment.Contains("SL") && ask >= exitOrder.Price) triggered = true;
                         else if (exitOrder.Comment.Contains("TP") && ask <= exitOrder.Price) triggered = true;
@@ -67,12 +66,32 @@ namespace TradeSoft.Engine.Execution
                 if (triggered)
                 {
                     ExecuteOrder(context, exitOrder);
-                    CleanupOCO(exitOrder);
+
                     _pendingExits.RemoveAt(i);
+
+                    if (!string.IsNullOrEmpty(exitOrder.Comment))
+                    {
+                        var parts = exitOrder.Comment.Split('_');
+                        if (parts.Length >= 3)
+                        {
+                            string parentId = parts[2];
+
+                            int partnerIndex = _pendingExits.FindIndex(o => o.Comment != null && o.Comment.Contains(parentId));
+
+                            if (partnerIndex != -1)
+                            {
+                                _pendingExits.RemoveAt(partnerIndex);
+
+                                if (partnerIndex < i)
+                                {
+                                    i--;
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            // 3. MATCHING ENGINE
             for (int i = 0; i < _activeOrders.Count; i++)
             {
                 var order = _activeOrders[i];
@@ -109,7 +128,6 @@ namespace TradeSoft.Engine.Execution
         private void ExecuteOrder(TickContext context, Order order, double? forceBasePrice = null)
         {
             double basePrice = forceBasePrice ?? ((order.Side == Side.Buy) ? context.Tick.Ask : context.Tick.Bid);
-
             double slippageImpact = _config.SlippagePips * _config.TickSize;
 
             double executedPrice = (order.Side == Side.Buy)
@@ -130,6 +148,7 @@ namespace TradeSoft.Engine.Execution
             {
                 OrderId = order.Id,
                 Timestamp = context.Tick.Timestamp,
+                Symbol = order.Symbol,
                 Side = order.Side,
                 Quantity = order.Quantity,
                 Price = executedPrice,
@@ -154,6 +173,7 @@ namespace TradeSoft.Engine.Execution
                 _pendingExits.Add(new Order
                 {
                     Id = DateTime.UtcNow.Ticks,
+                    Symbol = parent.Symbol,
                     Side = exitSide,
                     Quantity = parent.Quantity,
                     Price = parent.StopLoss.Value,
@@ -167,6 +187,7 @@ namespace TradeSoft.Engine.Execution
                 _pendingExits.Add(new Order
                 {
                     Id = DateTime.UtcNow.Ticks + 1,
+                    Symbol = parent.Symbol,
                     Side = exitSide,
                     Quantity = parent.Quantity,
                     Price = parent.TakeProfit.Value,
@@ -174,15 +195,6 @@ namespace TradeSoft.Engine.Execution
                     Comment = $"TP_Parent_{parent.Id}"
                 });
             }
-        }
-
-        private void CleanupOCO(Order triggeredOrder)
-        {
-            if (string.IsNullOrEmpty(triggeredOrder.Comment)) return;
-            var parts = triggeredOrder.Comment.Split('_');
-            if (parts.Length < 3) return;
-            string parentId = parts[2];
-            _pendingExits.RemoveAll(o => o != triggeredOrder && o.Comment != null && o.Comment.Contains(parentId));
         }
 
         private bool IsExitOrder(Order order)
