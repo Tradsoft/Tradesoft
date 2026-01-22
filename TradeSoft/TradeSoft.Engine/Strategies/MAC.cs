@@ -79,6 +79,7 @@ namespace TradeSoft.Engine.Strategies
             {
                 Id = DateTime.UtcNow.Ticks,
                 Timestamp = ts,
+                Symbol = "EURUSD",
                 Side = side,
                 Quantity = Math.Abs(delta),
                 Type = OrderType.Market,

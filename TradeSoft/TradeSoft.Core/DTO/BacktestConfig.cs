@@ -21,7 +21,11 @@
         public double TickSize { get; set; } = 0.0001;
 
         public double MaxRiskPerTradePercent { get; set; } = 1.0; 
-        public double MaxDrawdownPercent { get; set; } = 10.0;    
+        public double MaxDrawdownPercent { get; set; } = 10.0;   
+        public int MaxConcurrentPositions { get; set; } = 5;
+        public double MaxDailyLossPercent { get; set; } = 5.0;
+        public double MinRiskRewardRatio { get; set; } = 1.0;
+
     }
 
     public enum AssetType { Spot, Future, CFDs }
@@ -36,6 +40,9 @@
         public double NetProfit { get; set; }
         public double ReturnPercent { get; set; }
         public int TotalTrades { get; set; }
+        public double WinRate { get; set; }
+        public double ProfitFactor { get; set; }
+        public double MaxDrawdownPercent { get; set; }
         public List<TradeResultItem> Trades { get; set; } = new();
         public List<EquityPoint> EquityCurve { get; set; } = new();
     }

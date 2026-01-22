@@ -9,9 +9,12 @@ namespace TradeSoft.Engine.Management
     public class PortfolioManager : Handler
     {
         private readonly Portfolio _portfolio;
+        private readonly TickData _tick;
 
-        // Pour ne pas saturer la RAM, on n'enregistre l'équité que de temps en temps
-        // (ex: toutes les heures ou à chaque trade)
+        public double PeakEquity { get; private set; }
+        public double CurrentPrice { get; private set; }
+        public int OpenPositionCount => _portfolio.Positions.Count;
+
         public readonly List<(DateTime Time, double Equity)> EquityCurve = new();
 
         public readonly List<Trade> TradeHistory = new List<Trade>();
@@ -21,23 +24,29 @@ namespace TradeSoft.Engine.Management
         public PortfolioManager(double initialCash)
         {
             _portfolio = new Portfolio(initialCash);
+
+            PeakEquity = initialCash;
+
+            EquityCurve.Add((DateTime.MinValue, initialCash));
         }
 
         protected override void OnProcess(TickContext context)
         {
-            // 1. Traiter les exécutions (Trades) venant du Broker
+            CurrentPrice = _tick.MidPrice;
+
             foreach (var trade in context.Trades)
             {
                 _portfolio.OnTrade(trade);
                 TradeHistory.Add(trade);
             }
 
-            // 2. Mettre à jour la valeur du portefeuille avec le prix actuel du tick
-            // (Mark-to-Market)
-            _portfolio.MarkToMarket(context.Tick.MidPrice);
+            _portfolio.MarkToMarket(CurrentPrice);
 
-            // 3. Enregistrement de la courbe (Sampling)
-            // On enregistre si un trade a eu lieu OU si c'est la fin de la journée (simplifié ici à chaque trade pour l'exemple)
+            if (_portfolio.Equity > PeakEquity)
+            {
+                PeakEquity = _portfolio.Equity;
+            }
+
             if (context.Trades.Count > 0)
             {
                 EquityCurve.Add((new DateTime(context.Tick.Timestamp), _portfolio.Equity));
