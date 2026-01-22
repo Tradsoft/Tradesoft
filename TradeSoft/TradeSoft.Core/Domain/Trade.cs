@@ -3,9 +3,10 @@
     public class Trade
     {
         public long OrderId { get; set; }
-        public long Timestamp { get; set; } 
+        public long Timestamp { get; set; }
+        public string Symbol { get; set; } = string.Empty;
         public Side Side { get; set; }
-        public double Price { get; set; }   // Prix d'exécution (peut différer du prix demandé aka Slippage)
+        public double Price { get; set; } 
         public double Quantity { get; set; }
         public double Commission { get; set; }
 

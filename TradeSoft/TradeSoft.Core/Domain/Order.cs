@@ -7,6 +7,7 @@
     {
         public long Id { get; set; }
         public long Timestamp { get; set; }
+        public string Symbol { get; set; } = string.Empty;
         public Side Side { get; set; }
         public double Price { get; set; }
         public double Quantity { get; set; }
