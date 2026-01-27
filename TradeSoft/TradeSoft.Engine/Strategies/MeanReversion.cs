@@ -26,7 +26,6 @@ namespace TradeSoft.Engine.Strategies
 
         protected override void OnProcess(TickContext context)
         {
-            // MODIF : On attend la bougie
             if (context.GeneratedBar == null) return;
             var bar = context.GeneratedBar;
 
@@ -53,7 +52,6 @@ namespace TradeSoft.Engine.Strategies
             double upper = mean + _k * stdDev;
             double lower = mean - _k * stdDev;
 
-            // Logique simple : Achat en bas, Vente en haut
             if (price < lower)
             {
                 SendToTarget(context, +_lot, price, "BUY", mean, upper, lower, ts);
