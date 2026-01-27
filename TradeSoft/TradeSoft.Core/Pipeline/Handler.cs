@@ -11,7 +11,6 @@ namespace TradeSoft.Core.Pipeline
             _next = next;
         }
 
-        // Méthode template : Exécute le handler courant, puis passe au suivant
         public void Execute(TickContext context)
         {
             OnProcess(context);
@@ -22,7 +21,6 @@ namespace TradeSoft.Core.Pipeline
             }
         }
 
-        // Chaque composant (Stratégie, Broker) implémentera ceci
         protected abstract void OnProcess(TickContext context);
     }
 }
