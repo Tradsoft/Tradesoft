@@ -20,7 +20,8 @@ namespace TradeSoft.Engine.Analysis
             result.ReturnPercent = result.InitialCash > 0 ? (result.NetProfit / result.InitialCash) * 100 : 0;
             result.TotalTrades = history.Count;
 
-            if (result.TotalTrades == 0) return result;
+            if (result.TotalTrades == 0) 
+                return result;
 
             int wins = history.Count(t => t.PnL > 0);
             result.WinRate = (double)wins / result.TotalTrades * 100;
@@ -49,7 +50,8 @@ namespace TradeSoft.Engine.Analysis
 
         private static double CalculateMaxDrawdown(List<(DateTime, double)> curve)
         {
-            if (curve == null || curve.Count == 0) return 0;
+            if (curve == null || curve.Count == 0) 
+                return 0;
 
             double maxDrawdown = 0;
             double peak = curve[0].Item2;

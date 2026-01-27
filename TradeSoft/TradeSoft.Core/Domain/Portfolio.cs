@@ -28,7 +28,8 @@
 
             foreach (var pos in oppositePositions)
             {
-                if (qtyRemainingToProcess <= 0) break;
+                if (qtyRemainingToProcess <= 0) 
+                    break;
 
                 double qtyToClose = Math.Min(pos.Quantity, qtyRemainingToProcess);
 
