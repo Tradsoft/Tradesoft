@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.DTO;
@@ -25,45 +24,65 @@ namespace TradeSoft.Engine.Management
 
         protected override void OnProcess(TickContext context)
         {
-            DateTime tickTime = new DateTime(context.Tick.Timestamp);
-            double currentEquity = _portfolioManager.CurrentPortfolio.Equity;
+            UpdateDailyState(context.Tick.Timestamp);
 
-            // 1. RESET JOURNALIER
+            if (CheckCircuitBreakers(context))
+            {
+                return; 
+            }
+
+            ProcessNewOrders(context);
+        }
+
+        private void UpdateDailyState(long tickTimestamp)
+        {
+            DateTime tickTime = new DateTime(tickTimestamp);
+
             if (tickTime.Date > _currentDate)
             {
                 _currentDate = tickTime.Date;
-                _startOfDayEquity = currentEquity;
+                _startOfDayEquity = _portfolioManager.CurrentPortfolio.Equity;
                 _dailyLossLimitReached = false;
             }
+        }
 
-            // 2. CHECK DRAWDOWN
+        private bool CheckCircuitBreakers(TickContext context)
+        {
             if (IsMaxDrawdownReached())
             {
                 if (context.NewOrders.Count > 0) LogRejection("Max Drawdown Reached");
                 context.NewOrders.Clear();
-                return;
+                return true;
             }
 
-            // 3. CHECK DAILY LOSS
+            double currentEquity = _portfolioManager.CurrentPortfolio.Equity;
             double dailyLossLimit = _startOfDayEquity * (1.0 - (_config.MaxDailyLossPercent / 100.0));
-            if (currentEquity <= dailyLossLimit) _dailyLossLimitReached = true;
+
+            if (currentEquity <= dailyLossLimit)
+            {
+                _dailyLossLimitReached = true;
+            }
 
             if (_dailyLossLimitReached)
             {
                 if (context.NewOrders.Count > 0) LogRejection("Daily Loss Limit Reached");
                 context.NewOrders.Clear();
-                return;
+                return true;
             }
 
-            // 4. TRAITEMENT DES ORDRES
+            return false;
+        }
+
+        private void ProcessNewOrders(TickContext context)
+        {
             int currentPositions = _portfolioManager.OpenPositionCount;
 
             for (int i = context.NewOrders.Count - 1; i >= 0; i--)
             {
                 var order = context.NewOrders[i];
+
                 if (IsExitOrder(order)) continue;
 
-                // A. Limite positions simultanées
                 if (currentPositions >= _config.MaxConcurrentPositions)
                 {
                     LogRejection($"Max Positions Reached ({currentPositions}/{_config.MaxConcurrentPositions})");
@@ -71,7 +90,6 @@ namespace TradeSoft.Engine.Management
                     continue;
                 }
 
-                // B. Validation Ratio R:R (utilise le prix du tick actuel)
                 if (!CheckRiskRewardRatio(order, context.Tick))
                 {
                     LogRejection("Bad Risk/Reward Ratio");
@@ -79,7 +97,6 @@ namespace TradeSoft.Engine.Management
                     continue;
                 }
 
-                // C. Sizing (utilise le prix du tick actuel)
                 if (!ValidateAndResizeOrder(order, context.Tick))
                 {
                     LogRejection("Sizing/Margin Failed (Price 0 or Insufficient Funds)");
@@ -96,8 +113,9 @@ namespace TradeSoft.Engine.Management
         {
             if (!order.StopLoss.HasValue || !order.TakeProfit.HasValue) return true;
 
-            // CORRECTION : On utilise le prix du tick (Bid/Ask) car plus frais que Portfolio
-            double entryPrice = (order.Type == OrderType.Limit) ? order.Price : (order.Side == Side.Buy ? tick.Ask : tick.Bid);
+            double entryPrice = (order.Type == OrderType.Limit)
+                ? order.Price
+                : (order.Side == Side.Buy ? tick.Ask : tick.Bid);
 
             double risk = Math.Abs(entryPrice - order.StopLoss.Value);
             double reward = Math.Abs(order.TakeProfit.Value - entryPrice);
@@ -110,11 +128,8 @@ namespace TradeSoft.Engine.Management
         {
             double equity = _portfolioManager.CurrentPortfolio.Equity;
             double riskAmount = equity * (_config.MaxRiskPerTradePercent / 100.0);
-
-            // Prix actuel de référence
             double currentPrice = (order.Side == Side.Buy) ? tick.Ask : tick.Bid;
 
-            // Sécurité anti-crash si prix aberrant ou 0
             if (currentPrice <= 0.00001) return false;
 
             if (order.StopLoss.HasValue)
@@ -127,12 +142,10 @@ namespace TradeSoft.Engine.Management
             }
             else
             {
-                // Fallback sans SL
                 double maxQty = (equity * 1.0) / currentPrice;
                 if (order.Quantity > maxQty) order.Quantity = maxQty;
             }
 
-            // Vérification finale quantité positive
             return order.Quantity > 0;
         }
 
@@ -142,7 +155,10 @@ namespace TradeSoft.Engine.Management
             return peak > 0 && ((peak - _portfolioManager.CurrentPortfolio.Equity) / peak * 100 >= _config.MaxDrawdownPercent);
         }
 
-        private bool IsExitOrder(Order order) => false;
+        private bool IsExitOrder(Order order)
+        {
+            return false;
+        }
 
         private void LogRejection(string reason)
         {

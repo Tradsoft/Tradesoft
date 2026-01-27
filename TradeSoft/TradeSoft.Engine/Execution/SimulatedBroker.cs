@@ -44,7 +44,8 @@ namespace TradeSoft.Engine.Execution
 
             for (int i = _pendingExits.Count - 1; i >= 0; i--)
             {
-                if (i >= _pendingExits.Count) continue;
+                if (i >= _pendingExits.Count) 
+                    continue;
 
                 var exitOrder = _pendingExits[i];
                 bool triggered = false;
