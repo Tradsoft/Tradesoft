@@ -32,11 +32,6 @@
         public double DefaultRiskNoSL { get; set; } = 0.02; 
         public double DefaultLeverageNoSL { get; set; } = 5.0; 
     }
-
-    public enum AssetType { Spot, Future, CFDs }
-    public enum CommissionType { Fixed, Percent }
-    public enum StrategyType { Breakout, MAC, Random, RSI, MeanReversion }
-
     public class BacktestResult
     {
         public double InitialCash { get; set; }

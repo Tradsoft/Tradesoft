@@ -21,21 +21,18 @@ namespace TradeSoft.Engine.Strategies
 
         protected override void OnProcess(TickContext context)
         {
-            // MODIF : On attend la bougie
             if (context.GeneratedBar == null) return;
             var bar = context.GeneratedBar;
 
             double price = bar.Close;
             long ts = bar.Timestamp.Ticks;
 
-            // Remplissage initial
             if (_window.Count < _lookback)
             {
                 _window.Enqueue(price);
                 return;
             }
 
-            // Calcul Support/Resistance sur les N dernières bougies
             double resistance = double.MinValue;
             double support = double.MaxValue;
             foreach (var p in _window)
@@ -44,7 +41,6 @@ namespace TradeSoft.Engine.Strategies
                 if (p < support) support = p;
             }
 
-            // Signal
             if (price > resistance)
             {
                 SendToTarget(context, +_lot, price, "BUY (Breakout)", support, resistance, ts);
@@ -54,7 +50,6 @@ namespace TradeSoft.Engine.Strategies
                 SendToTarget(context, -_lot, price, "SELL (Breakdown)", support, resistance, ts);
             }
 
-            // Mise à jour fenêtre
             _window.Enqueue(price);
             if (_window.Count > _lookback) _window.Dequeue();
         }

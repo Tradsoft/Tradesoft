@@ -14,13 +14,4 @@ namespace TradeSoft.Core.Domain
         public bool IsTrade => (Flags & TickFlags.Trade) != 0;
         public double MidPrice => (Bid + Ask) / 2.0;
     }
-
-    [Flags]
-    public enum TickFlags : byte
-    {
-        None = 0,
-        Bid = 1,    
-        Ask = 2,    
-        Trade = 4   
-    }
 }
