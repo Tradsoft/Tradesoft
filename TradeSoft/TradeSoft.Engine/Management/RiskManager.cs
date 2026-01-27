@@ -127,26 +127,39 @@ namespace TradeSoft.Engine.Management
         private bool ValidateAndResizeOrder(Order order, TickData tick)
         {
             double equity = _portfolioManager.CurrentPortfolio.Equity;
-            double riskAmount = equity * (_config.MaxRiskPerTradePercent / 100.0);
             double currentPrice = (order.Side == Side.Buy) ? tick.Ask : tick.Bid;
 
             if (currentPrice <= 0.00001) return false;
 
+            double quantityByRisk = 0;
+
             if (order.StopLoss.HasValue)
             {
+                double riskPerTradeCash = equity * (_config.MaxRiskPerTradePercent / 100.0);
                 double entryPrice = (order.Type == OrderType.Limit) ? order.Price : currentPrice;
-                double slDistance = Math.Abs(entryPrice - order.StopLoss.Value);
 
-                if (slDistance <= 0) return false;
-                order.Quantity = riskAmount / slDistance;
+                double slDistance = Math.Abs(entryPrice - order.StopLoss.Value);
+                if (slDistance < 0.0001) slDistance = 0.0001; 
+
+                quantityByRisk = riskPerTradeCash / slDistance;
             }
             else
             {
-                double maxQty = (equity * 1.0) / currentPrice;
-                if (order.Quantity > maxQty) order.Quantity = maxQty;
+                quantityByRisk = (equity * _config.DefaultRiskNoSL * _config.DefaultLeverageNoSL) / currentPrice;
             }
 
-            return order.Quantity > 0;
+            double maxBuyingPower = equity * _config.Leverage;
+            double quantityByMargin = maxBuyingPower / currentPrice;
+
+            double finalQuantity = Math.Min(quantityByRisk, quantityByMargin);
+
+            if (finalQuantity < _config.MinLotSize)
+            {
+                return false;
+            }
+
+            order.Quantity = finalQuantity;
+            return true;
         }
 
         private bool IsMaxDrawdownReached()

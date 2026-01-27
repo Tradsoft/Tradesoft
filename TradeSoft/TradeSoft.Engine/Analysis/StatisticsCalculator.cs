@@ -50,7 +50,7 @@ namespace TradeSoft.Engine.Analysis
 
         private static double CalculateMaxDrawdown(List<(DateTime, double)> curve)
         {
-            if (curve == null || curve.Count == 0) 
+            if (curve == null || curve.Count == 0)
                 return 0;
 
             double maxDrawdown = 0;
@@ -65,11 +65,13 @@ namespace TradeSoft.Engine.Analysis
                     peak = currentEquity;
                 }
 
-                double drawdown = (peak - currentEquity) / peak * 100;
-
-                if (drawdown > maxDrawdown)
+                if (peak > 0)
                 {
-                    maxDrawdown = drawdown;
+                    double drawdown = (peak - currentEquity) / peak * 100;
+                    if (drawdown > maxDrawdown)
+                    {
+                        maxDrawdown = drawdown;
+                    }
                 }
             }
 
