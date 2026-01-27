@@ -57,72 +57,71 @@ class Program
             // 3. INITIALISATION DU SERVICE (Couche Service)
             // =========================================================
 
-            // On prépare les dépendances
             var providerLogger = loggerFactory.CreateLogger<MultiFileTickProvider>();
             var provider = new MultiFileTickProvider(dossierData, providerLogger);
-
-            // On crée le service (C'est le seul point de contact avec le moteur)
             IBacktestService service = new BacktestService(provider, loggerFactory);
 
             // =========================================================
             // 4. INTERFACE UTILISATEUR (Création de la Config)
             // =========================================================
 
-            // A. Choix du Timeframe
             TimeSpan timeframe = ChooseTimeframe();
-
-            // B. Choix de la Stratégie (Type + Paramètres)
             (StrategyType stratType, Dictionary<string, object> stratParams) = ChooseStrategy();
 
-            // C. Construction de l'objet de Configuration
             var config = new BacktestConfig
             {
                 Symbol = "EURUSD",
                 StartDate = new DateTime(2015, 01, 01),
-                EndDate = new DateTime(2015, 02, 01),
+                EndDate = new DateTime(2015, 11, 10),
                 InitialCash = 100_000,
 
                 Timeframe = timeframe,
                 Strategy = stratType,
                 StrategyParameters = stratParams,
 
-                // Valeurs par défaut pour le risque (peuvent être surchargées par ConfigureRisk)
                 MaxRiskPerTradePercent = 1.0,
+                Leverage = 30.0,
                 MaxDrawdownPercent = 10.0,
                 MaxDailyLossPercent = 5.0,
                 MaxConcurrentPositions = 5,
                 MinRiskRewardRatio = 1.0,
 
-                // Réalisme par défaut
+                MinLotSize = 1000.0,
+                LotSize = 100000.0,
+                DefaultRiskNoSL = 0.02,       
+                DefaultLeverageNoSL = 5.0,    
+
                 CommissionPerLot = 2.5,
                 SlippagePips = 0.0
             };
 
-            // D. Configuration Avancée du Risque (Optionnel)
             ConfigureRisk(config);
 
             Console.WriteLine($"\n--- PRÊT À LANCER LE BACKTEST ---");
             Console.WriteLine($"Stratégie : {config.Strategy}");
             Console.WriteLine($"Timeframe : {config.Timeframe}");
             Console.WriteLine($"Capital   : {config.InitialCash:C0}");
+
+            if (stratType == StrategyType.MAC)
+            {
+                Console.WriteLine($"Mode MAC  : Risque Défaut {config.DefaultRiskNoSL:P0} | Levier Défaut x{config.DefaultLeverageNoSL}");
+            }
             Console.WriteLine("Appuyez sur ENTRÉE pour démarrer...");
             Console.ReadLine();
 
             // =========================================================
-            // 5. EXÉCUTION (Async)
+            // 5. EXÉCUTION
             // =========================================================
 
-            // Gestion de la progression
             var progress = new Progress<float>(p =>
             {
                 Console.Write($"\rProgression : {p * 100:F1}%   ");
             });
 
-            // Appel au Service (ne bloque pas l'UI)
             BacktestResult result = await service.RunBacktestAsync(config, progress);
 
             // =========================================================
-            // 6. AFFICHAGE DES RÉSULTATS (KPIs)
+            // 6. RÉSULTATS
             // =========================================================
             Console.WriteLine("\n\n========================================");
             Console.WriteLine("          RÉSULTATS DU BACKTEST         ");
@@ -147,7 +146,7 @@ class Program
     }
 
     // =========================================================
-    // MENUS UTILISATEUR
+    // MENUS
     // =========================================================
 
     private static TimeSpan ChooseTimeframe()
@@ -193,31 +192,31 @@ class Program
 
         switch (choice)
         {
-            case 1: // RSI
+            case 1:
                 Console.WriteLine("\n[PARAMÈTRES RSI]");
                 paramsDict["Period"] = ReadInt("Period (défaut 14) : ", 14);
                 paramsDict["Oversold"] = ReadDouble("Oversold (défaut 30) : ", 30);
                 paramsDict["Overbought"] = ReadDouble("Overbought (défaut 70) : ", 70);
                 return (StrategyType.RSI, paramsDict);
 
-            case 2: // MA Crossover
+            case 2:
                 Console.WriteLine("\n[PARAMÈTRES MA]");
                 paramsDict["ShortPeriod"] = ReadInt("MA Courte (défaut 20) : ", 20);
                 paramsDict["LongPeriod"] = ReadInt("MA Longue (défaut 50) : ", 50);
                 return (StrategyType.MAC, paramsDict);
 
-            case 3: // Mean Reversion
+            case 3:
                 Console.WriteLine("\n[PARAMÈTRES MEAN REVERSION]");
                 paramsDict["Period"] = ReadInt("Period (défaut 20) : ", 20);
                 paramsDict["K"] = ReadDouble("K (défaut 2.0) : ", 2.0);
                 return (StrategyType.MeanReversion, paramsDict);
 
-            case 4: // Breakout
+            case 4:
                 Console.WriteLine("\n[PARAMÈTRES BREAKOUT]");
                 paramsDict["Lookback"] = ReadInt("Lookback (défaut 20) : ", 20);
                 return (StrategyType.Breakout, paramsDict);
 
-            case 5: // Random
+            case 5:
             default:
                 return (StrategyType.Random, paramsDict);
         }
@@ -233,12 +232,12 @@ class Program
 
         config.InitialCash = ReadDouble($"Capital Initial [Defaut {config.InitialCash}] : ", config.InitialCash);
         config.MaxRiskPerTradePercent = ReadDouble($"Risque par Trade % [Defaut {config.MaxRiskPerTradePercent}] : ", config.MaxRiskPerTradePercent);
-        config.MaxDailyLossPercent = ReadDouble($"Perte Max Jour % [Defaut {config.MaxDailyLossPercent}] : ", config.MaxDailyLossPercent);
+        config.Leverage = ReadDouble($"Levier Compte Max [Defaut {config.Leverage}] : ", config.Leverage); 
         config.MaxDrawdownPercent = ReadDouble($"Max Drawdown % [Defaut {config.MaxDrawdownPercent}] : ", config.MaxDrawdownPercent);
-        config.MaxConcurrentPositions = ReadInt($"Max Positions Simultanées [Defaut {config.MaxConcurrentPositions}] : ", config.MaxConcurrentPositions);
 
-        config.SlippagePips = ReadDouble($"Simulation Slippage (Pips) [Defaut {config.SlippagePips}] : ", config.SlippagePips);
-        config.CommissionPerLot = ReadDouble($"Commission ($/Lot) [Defaut {config.CommissionPerLot}] : ", config.CommissionPerLot);
+        Console.WriteLine("--- Paramètres Stratégies sans SL (ex: MAC) ---");
+        config.DefaultRiskNoSL = ReadDouble($"Risque par défaut % [Defaut {config.DefaultRiskNoSL}] : ", config.DefaultRiskNoSL);
+        config.DefaultLeverageNoSL = ReadDouble($"Levier par défaut [Defaut {config.DefaultLeverageNoSL}] : ", config.DefaultLeverageNoSL);
     }
 
     private static int ReadInt(string prompt, int? defaultValue = null, int? min = null, int? max = null)

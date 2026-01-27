@@ -12,6 +12,9 @@ namespace TradeSoft.Engine.Strategies
         private readonly double _overbought;
         private readonly double _lot;
 
+        private readonly double _slPips;
+        private readonly double _tpPips;
+
         private bool _hasPrevPrice;
         private double _prevPrice;
 
@@ -19,20 +22,22 @@ namespace TradeSoft.Engine.Strategies
         private int _initCount;
         private double _sumGain;
         private double _sumLoss;
-
         private double _avgGain;
         private double _avgLoss;
 
         private double? _prevRsi;
-        private double _positionLots = 0.0;
 
-        public RSI(int period = 14, double oversold = 30, double overbought = 70, double lot = 1.0)
+        private int _currentDirection = 0;
+
+        public RSI(int period = 14, double oversold = 30, double overbought = 70, double lot = 1.0, double slPips = 50, double tpPips = 100)
         {
             if (period <= 1) throw new ArgumentOutOfRangeException(nameof(period));
             _period = period;
             _oversold = oversold;
             _overbought = overbought;
             _lot = lot;
+            _slPips = slPips;
+            _tpPips = tpPips;
         }
 
         protected override void OnProcess(TickContext context)
@@ -67,7 +72,6 @@ namespace TradeSoft.Engine.Strategies
                 _avgGain = _sumGain / _period;
                 _avgLoss = _sumLoss / _period;
                 _initialized = true;
-
                 _prevRsi = ComputeRsi(_avgGain, _avgLoss);
                 return;
             }
@@ -80,28 +84,40 @@ namespace TradeSoft.Engine.Strategies
             if (_prevRsi.HasValue)
             {
                 bool buySignal = (_prevRsi.Value <= _oversold && rsi > _oversold);
+
                 bool sellSignal = (_prevRsi.Value >= _overbought && rsi < _overbought);
 
-                if (buySignal)
+                if (buySignal && _currentDirection != 1)
                 {
-                    SendToTarget(context, +_lot, price, "BUY", rsi, ts);
+                    SendOrder(context, Side.Buy, price, rsi, ts);
+                    _currentDirection = 1; 
                 }
-                else if (sellSignal)
+                else if (sellSignal && _currentDirection != -1)
                 {
-                    SendToTarget(context, -_lot, price, "SELL", rsi, ts);
+                    SendOrder(context, Side.Sell, price, rsi, ts);
+                    _currentDirection = -1; 
                 }
             }
 
             _prevRsi = rsi;
         }
 
-        private void SendToTarget(TickContext context, double targetLots, double price, string label, double rsi, long timestamp)
+        private void SendOrder(TickContext context, Side side, double price, double rsi, long timestamp)
         {
-            double delta = targetLots - _positionLots;
-            if (Math.Abs(delta) < 1e-12) return;
+            double tickSize = 0.0001;
 
-            Side side = delta > 0 ? Side.Buy : Side.Sell;
-            double qty = Math.Abs(delta);
+            double slPrice, tpPrice;
+
+            if (side == Side.Buy)
+            {
+                slPrice = price - (_slPips * tickSize);
+                tpPrice = price + (_tpPips * tickSize);
+            }
+            else
+            {
+                slPrice = price + (_slPips * tickSize);
+                tpPrice = price - (_tpPips * tickSize);
+            }
 
             context.NewOrders.Add(new Order
             {
@@ -109,13 +125,15 @@ namespace TradeSoft.Engine.Strategies
                 Timestamp = timestamp,
                 Symbol = "EURUSD",
                 Side = side,
-                Quantity = qty,
+                Quantity = _lot,
                 Type = OrderType.Market,
-                Price = price
+                Price = price,
+                StopLoss = slPrice,   
+                TakeProfit = tpPrice, 
+                Comment = $"RSI_{rsi:F1}"
             });
 
-            _positionLots = targetLots;
-            Console.WriteLine($"[RSI] {label} | RSI={rsi:F2} | Target={targetLots} | {new DateTime(timestamp):HH:mm}");
+            Console.WriteLine($"[RSI] {side} | Price={price:F5} | RSI={rsi:F1} | SL={slPrice:F5} TP={tpPrice:F5}");
         }
 
         private static double ComputeRsi(double avgGain, double avgLoss)

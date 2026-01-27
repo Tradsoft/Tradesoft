@@ -136,9 +136,10 @@ namespace TradeSoft.Engine.Execution
                 : basePrice - slippageImpact;
 
             double commission = 0;
+
             if (_config.CommissionType == CommissionType.Fixed)
             {
-                commission = _config.CommissionPerLot * order.Quantity;
+                commission = _config.CommissionPerLot * (order.Quantity / _config.LotSize);
             }
             else
             {
