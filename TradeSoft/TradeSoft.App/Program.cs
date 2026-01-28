@@ -8,6 +8,8 @@ using TradeSoft.Core.DTO;
 using TradeSoft.Core.Services;
 using TradeSoft.Engine.Services;
 using TradeSoft.Infrastructure.IO;
+using TradeSoft.Infrastructure.Persistence;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 class Program
 {
@@ -34,6 +36,7 @@ class Program
             @"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
             @"C:\Users\Pc\Bureau\Projet\Data\EURUSD",
             @"C:\Users\inesm\OneDrive\Documents\M2\Tradesoft\Data\EURUSD",
+            @"C:\Users\louis\source\repos\Tradesoft\Data\EURUSD",
             Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD")),
         };
 
@@ -135,6 +138,11 @@ class Program
             Console.WriteLine($"Profit Factor   : {result.ProfitFactor:F2}");
             Console.WriteLine($"Max Drawdown    : {result.MaxDrawdownPercent:F2}%");
             Console.WriteLine("========================================");
+
+            Console.WriteLine("\n💾 Sauvegarde en base de données...");
+            var dbService = new DatabaseService();
+            dbService.SaveBacktestResult(result, config);
+            Console.WriteLine("✅ Données sauvegardées dans 'tradesoft.db'");
 
         }
         catch (Exception ex)
