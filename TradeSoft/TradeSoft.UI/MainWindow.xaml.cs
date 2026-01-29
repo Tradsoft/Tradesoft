@@ -9,7 +9,6 @@ using ScottPlot.TickGenerators;
 using TradeSoft.Core.DTO;
 using TradeSoft.UI.ViewModels;
 
-// Alias indispensables
 using Bar = TradeSoft.Core.Domain.Bar;
 using Color = ScottPlot.Color;
 
@@ -19,7 +18,6 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
 
-    // Stockage local pour l'interaction souris
     private List<Bar>? _currentBars;
     private ScottPlot.Plottables.Crosshair? _crosshair;
 
@@ -63,28 +61,21 @@ public partial class MainWindow : Window
     {
         if (_crosshair == null || _currentBars == null || _currentBars.Count == 0) return;
 
-        // 1. Récupérer la position de la souris WPF (Pixels logiques)
         Point mousePoint = e.GetPosition(MainPlot);
 
-        // --- ✅ CORRECTION DU DÉCALAGE (DPI SCALING) ---
-        // On récupère le facteur de zoom de l'écran (ex: 1.25 pour 125%)
         var source = PresentationSource.FromVisual(MainPlot);
         double dpiScaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
         double dpiScaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
 
-        // On convertit les pixels logiques en pixels physiques pour ScottPlot
         float pixelX = (float)(mousePoint.X * dpiScaleX);
         float pixelY = (float)(mousePoint.Y * dpiScaleY);
 
-        // 2. Convertir en coordonnées du graphique
         var coordinates = MainPlot.Plot.GetCoordinates(pixelX, pixelY);
 
-        // 3. Mettre à jour la position du réticule
         _crosshair.X = coordinates.X;
         _crosshair.Y = coordinates.Y;
         _crosshair.IsVisible = true;
 
-        // 4. Trouver la bougie correspondante
         int index = (int)Math.Round(coordinates.X);
 
         if (index >= 0 && index < _currentBars.Count)
@@ -97,7 +88,6 @@ public partial class MainWindow : Window
             TxtOHLC.Text = "";
         }
 
-        // 5. Rafraîchir
         MainPlot.Refresh();
     }
 
@@ -124,7 +114,6 @@ public partial class MainWindow : Window
 
         Application.Current.Dispatcher.Invoke(() =>
         {
-            // 1. Préparation des données
             var oldLimits = MainPlot.Plot.Axes.GetLimits();
             var scottCandles = result.Bars.Select((b, i) => new OHLC(
                 b.Open, b.High, b.Low, b.Close,
@@ -133,19 +122,14 @@ public partial class MainWindow : Window
             )).ToList();
             DateTime[] realDates = result.Bars.Select(b => b.Timestamp).ToArray();
 
-            // 2. Nettoyage
             MainPlot.Plot.Clear();
 
-            // 3. DESSIN DES BOUGIES EN PREMIER (Fond)
             var series = MainPlot.Plot.Add.Candlestick(scottCandles);
             series.RisingColor = Color.FromHex("#2962FF");
             series.FallingColor = Color.FromHex("#F23645");
 
-            // 4. AJOUT DU CROSSHAIR EN DERNIER (Premier plan)
             _crosshair = MainPlot.Plot.Add.Crosshair(0, 0);
 
-            // Configuration explicite des lignes pour être sûr qu'elles s'affichent
-            // On force le blanc pour tester la visibilité
             var lineColor = Color.FromHex("#FFFFFF");
 
             _crosshair.VerticalLine.Color = lineColor;
@@ -158,10 +142,8 @@ public partial class MainWindow : Window
             _crosshair.HorizontalLine.LineStyle.Pattern = LinePattern.Dashed;
             _crosshair.HorizontalLine.LabelStyle.IsVisible = false;
 
-            // Masquer par défaut jusqu'au mouvement de souris
             _crosshair.IsVisible = false;
 
-            // 5. Axe X (Dates)
             MainPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
             {
                 LabelFormatter = (value) =>
@@ -173,7 +155,6 @@ public partial class MainWindow : Window
                 }
             };
 
-            // 6. Zoom
             if (_viewModel.ShouldResetZoom)
                 MainPlot.Plot.Axes.AutoScale();
             else

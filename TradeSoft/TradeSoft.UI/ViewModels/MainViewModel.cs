@@ -15,7 +15,6 @@ namespace TradeSoft.UI.ViewModels
         private readonly BacktestService _backtestService;
         private CancellationTokenSource? _cts;
 
-        // --- Dates ---
         private DateTime _startDate = new DateTime(2015, 01, 01);
         public DateTime StartDate
         {
@@ -30,7 +29,6 @@ namespace TradeSoft.UI.ViewModels
             set { _endDate = value; OnPropertyChanged(); TriggerBacktest(resetZoom: true); }
         }
 
-        // --- Timeframe ---
         public ObservableCollection<TimeSpan> AvailableTimeframes { get; } = new()
         {
             TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromHours(1),
@@ -44,7 +42,6 @@ namespace TradeSoft.UI.ViewModels
             set { _selectedTimeframe = value; OnPropertyChanged(); TriggerBacktest(resetZoom: true); }
         }
 
-        // --- Stratégie ---
         public ObservableCollection<string> StrategyNames { get; } = new()
         {
             "RSI", "MovingAverageCrossover", "MeanReversion", "Breakout"
@@ -65,14 +62,12 @@ namespace TradeSoft.UI.ViewModels
 
         public ObservableCollection<StrategyParameterViewModel> Parameters { get; } = new();
 
-        // --- État ---
         private string _statusText = "Prêt.";
         public string StatusText { get => _statusText; set { _statusText = value; OnPropertyChanged(); } }
 
         private bool _isBusy;
         public bool IsBusy { get => _isBusy; set { _isBusy = value; OnPropertyChanged(); } }
 
-        // --- Communication Vue ---
         public event EventHandler<BacktestResult>? BacktestCompleted;
         public bool ShouldResetZoom { get; private set; }
 
