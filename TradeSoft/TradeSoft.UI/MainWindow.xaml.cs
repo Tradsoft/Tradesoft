@@ -1,154 +1,185 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Windows;
-using Microsoft.Extensions.Logging;
+using System.Windows.Input;
+using System.Windows.Media;
+using ScottPlot;
+using ScottPlot.TickGenerators;
 using TradeSoft.Core.DTO;
-using TradeSoft.Core.Services;
-using TradeSoft.Engine.Services;
-using TradeSoft.Infrastructure.IO;
+using TradeSoft.UI.ViewModels;
+
+// Alias indispensables
+using Bar = TradeSoft.Core.Domain.Bar;
+using Color = ScottPlot.Color;
 
 namespace TradeSoft.UI;
 
 public partial class MainWindow : Window
 {
-	public MainWindow()
-	{
-		InitializeComponent();
-		
-		SetupPlotStyle(PlotPrice, "Exécution des Trades (EUR/USD)");
-		SetupPlotStyle(PlotEquity, "Performance du Capital (Equity)");
-	}
+    private readonly MainViewModel _viewModel;
 
-	private void SetupPlotStyle(ScottPlot.WPF.WpfPlot plot, string title)
-	{
-		
-		plot.Plot.FigureBackground.Color = ScottPlot.Color.FromHex("#121212");
-		plot.Plot.DataBackground.Color = ScottPlot.Color.FromHex("#1E1E1E");
+    // Stockage local pour l'interaction souris
+    private List<Bar>? _currentBars;
+    private ScottPlot.Plottables.Crosshair? _crosshair;
 
-		
-		plot.Plot.Axes.Color(ScottPlot.Color.FromHex("#FFFFFF"));
+    public MainWindow()
+    {
+        InitializeComponent();
+        _viewModel = (MainViewModel)DataContext;
+        _viewModel.BacktestCompleted += OnBacktestCompleted;
 
-		
-		plot.Plot.Title(title, size: 16);
-		plot.Plot.Axes.Title.Label.ForeColor = ScottPlot.Color.FromHex("#FFFFFF");
+        SetupChartStyle();
+        SetupCrosshair();
+    }
 
-		plot.Plot.Axes.DateTimeTicksBottom();
-		plot.Refresh();
-	}
+    private void SetupChartStyle()
+    {
+        MainPlot.Plot.FigureBackground.Color = Color.FromHex("#131722");
+        MainPlot.Plot.DataBackground.Color = Color.FromHex("#131722");
+        MainPlot.Plot.Grid.MajorLineColor = Color.FromHex("#1E222D");
+        MainPlot.Plot.Axes.Color(Color.FromHex("#787B86"));
+        MainPlot.Plot.Layout.Frameless();
+    }
 
-	private async void BtnRun_Click(object sender, RoutedEventArgs e)
-	{
-		BtnRun.IsEnabled = false;
-		TxtStatus.Text = "Calcul en cours...";
+    private void SetupCrosshair()
+    {
+        _crosshair = MainPlot.Plot.Add.Crosshair(0, 0);
+        _crosshair.IsVisible = false;
 
-		
-		string[] cheminsPossibles = new[] {
-			@"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
-			@"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\EURUSD",
-			Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD"))
-		};
-		string dossierData = cheminsPossibles.FirstOrDefault(path => Directory.Exists(path));
+        _crosshair.LineColor = Color.FromHex("#787B86");
+        _crosshair.LinePattern = LinePattern.Dashed;
+        _crosshair.LineWidth = 1;
 
-		if (string.IsNullOrEmpty(dossierData))
-		{
-			MessageBox.Show("Dossier de données introuvable !");
-			BtnRun.IsEnabled = true;
-			return;
-		}
+        _crosshair.HorizontalLine.IsVisible = false;
+        _crosshair.VerticalLine.IsVisible = false;
 
-		try
-		{
-			
-			double cash = double.Parse(TxtInitialCash.Text.Replace(',', '.'), CultureInfo.InvariantCulture);
-			double maxDD = double.Parse(TxtMaxDD.Text.Replace(',', '.'), CultureInfo.InvariantCulture);
+        MainPlot.MouseMove += MainPlot_MouseMove;
+        MainPlot.MouseEnter += (s, e) => { if (_crosshair != null) _crosshair.IsVisible = true; };
+        MainPlot.MouseLeave += (s, e) => { if (_crosshair != null) _crosshair.IsVisible = false; MainPlot.Refresh(); };
+    }
 
-			var config = new BacktestConfig
-			{
-				Symbol = "EURUSD",
-				StartDate = PickerStart.SelectedDate ?? new DateTime(2015, 01, 01),
-				EndDate = PickerEnd.SelectedDate ?? new DateTime(2015, 01, 02),
-				InitialCash = cash,
-				Strategy = (StrategyType)ComboStrategy.SelectedIndex,
-				MaxDrawdownPercent = maxDD,
-				StrategyParameters = new Dictionary<string, object> { { "Period", 14 } }
-			};
+    private void MainPlot_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_crosshair == null || _currentBars == null || _currentBars.Count == 0) return;
 
-			using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-			var provider = new MultiFileTickProvider(dossierData, loggerFactory.CreateLogger<MultiFileTickProvider>());
-			IBacktestService service = new BacktestService(provider, loggerFactory);
+        // 1. Récupérer la position de la souris WPF (Pixels logiques)
+        Point mousePoint = e.GetPosition(MainPlot);
 
-			var result = await service.RunBacktestAsync(config, new Progress<float>(p => ProgBar.Value = p * 100));
+        // --- ✅ CORRECTION DU DÉCALAGE (DPI SCALING) ---
+        // On récupère le facteur de zoom de l'écran (ex: 1.25 pour 125%)
+        var source = PresentationSource.FromVisual(MainPlot);
+        double dpiScaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        double dpiScaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
 
-			// 1. GRAPHIQUE DES PRIX AVEC TRADES
-			PlotPrice.Plot.Clear();
-			if (result.Trades != null && result.Trades.Any())
-			{
-				var line = PlotPrice.Plot.Add.ScatterLine(
-					result.Trades.Select(t => t.Time.ToOADate()).ToArray(),
-					result.Trades.Select(t => t.Price).ToArray()
-				);
-				line.Color = ScottPlot.Color.FromHex("#44FFFFFF");
+        // On convertit les pixels logiques en pixels physiques pour ScottPlot
+        float pixelX = (float)(mousePoint.X * dpiScaleX);
+        float pixelY = (float)(mousePoint.Y * dpiScaleY);
 
-				var buys = result.Trades.Where(t => t.Side.ToLower().Contains("buy")).ToList();
-				if (buys.Any())
-				{
-					var m = PlotPrice.Plot.Add.Markers(buys.Select(b => b.Time.ToOADate()).ToArray(), buys.Select(b => b.Price).ToArray());
-					m.Color = ScottPlot.Color.FromHex("#00FF00");
-					m.MarkerShape = ScottPlot.MarkerShape.FilledTriangleUp;
-					m.MarkerSize = 7;
-				}
+        // 2. Convertir en coordonnées du graphique
+        var coordinates = MainPlot.Plot.GetCoordinates(pixelX, pixelY);
 
-				var sells = result.Trades.Where(t => t.Side.ToLower().Contains("sell")).ToList();
-				if (sells.Any())
-				{
-					var m = PlotPrice.Plot.Add.Markers(sells.Select(s => s.Time.ToOADate()).ToArray(), sells.Select(s => s.Price).ToArray());
-					m.Color = ScottPlot.Color.FromHex("#FF0000");
-					m.MarkerShape = ScottPlot.MarkerShape.FilledTriangleDown;
-					m.MarkerSize = 7;
-				}
-			}
-			PlotPrice.Plot.Axes.Color(ScottPlot.Color.FromHex("#FFFFFF"));
-			PlotPrice.Plot.Axes.Title.Label.ForeColor = ScottPlot.Color.FromHex("#FFFFFF");
-			PlotPrice.Plot.Axes.AutoScale();
-			PlotPrice.Refresh();
+        // 3. Mettre à jour la position du réticule
+        _crosshair.X = coordinates.X;
+        _crosshair.Y = coordinates.Y;
+        _crosshair.IsVisible = true;
 
-			// 2. GRAPHIQUE PERFORMANCE 
-			PlotEquity.Plot.Clear();
-			if (result.EquityCurve != null && result.EquityCurve.Any())
-			{
-				var clean = result.EquityCurve.Where(x => x.Time.Year > 2000).ToList();
-				var sc = PlotEquity.Plot.Add.Scatter(
-					clean.Select(x => x.Time.ToOADate()).ToArray(),
-					clean.Select(x => x.Value).ToArray()
-				);
-				sc.Color = ScottPlot.Color.FromHex("#007ACC");
-				sc.MarkerSize = 0;
-				sc.LineWidth = 2;
-			}
-			PlotEquity.Plot.Axes.Color(ScottPlot.Color.FromHex("#FFFFFF"));
-			PlotEquity.Plot.Axes.Title.Label.ForeColor = ScottPlot.Color.FromHex("#FFFFFF");
-			PlotEquity.Plot.Axes.AutoScale();
-			PlotEquity.Refresh();
+        // 4. Trouver la bougie correspondante
+        int index = (int)Math.Round(coordinates.X);
 
-			// 3. STATS
-			TxtPnL.Text = $"{result.NetProfit:C2}";
-			TxtWin.Text = $"{result.WinRate:F1}%";
-			TxtDD.Text = $"{result.MaxDrawdownPercent:F1}%";
-			TxtPF.Text = $"{result.ProfitFactor:F2}";
-			TxtPnL.Foreground = result.NetProfit >= 0 ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.Red;
-			TxtStatus.Text = "Analyse terminée.";
-		}
-		catch (Exception ex)
-		{
-			MessageBox.Show("Erreur : " + ex.Message);
-			TxtStatus.Text = "Erreur.";
-		}
-		finally
-		{
-			BtnRun.IsEnabled = true;
-		}
-	}
+        if (index >= 0 && index < _currentBars.Count)
+        {
+            var bar = _currentBars[index];
+            UpdateOHLCDisplay(bar);
+        }
+        else
+        {
+            TxtOHLC.Text = "";
+        }
+
+        // 5. Rafraîchir
+        MainPlot.Refresh();
+    }
+
+    private void UpdateOHLCDisplay(Bar bar)
+    {
+        double change = bar.Close - bar.Open;
+        double percent = (change / bar.Open) * 100;
+
+        string text = $"Date: {bar.Timestamp:dd/MM HH:mm}   O: {bar.Open:F5}   H: {bar.High:F5}   L: {bar.Low:F5}   C: {bar.Close:F5}   ";
+        TxtOHLC.Text = text + $"({(change >= 0 ? "+" : "")}{percent:F2}%)";
+    }
+
+    private void OnBacktestCompleted(object? sender, BacktestResult result)
+    {
+        if (result.Bars == null || result.Bars.Count == 0)
+        {
+            MainPlot.Plot.Clear();
+            MainPlot.Refresh();
+            _currentBars = null;
+            return;
+        }
+
+        _currentBars = result.Bars;
+
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            // 1. Préparation des données
+            var oldLimits = MainPlot.Plot.Axes.GetLimits();
+            var scottCandles = result.Bars.Select((b, i) => new OHLC(
+                b.Open, b.High, b.Low, b.Close,
+                DateTime.FromOADate(i),
+                TimeSpan.FromDays(0.8)
+            )).ToList();
+            DateTime[] realDates = result.Bars.Select(b => b.Timestamp).ToArray();
+
+            // 2. Nettoyage
+            MainPlot.Plot.Clear();
+
+            // 3. DESSIN DES BOUGIES EN PREMIER (Fond)
+            var series = MainPlot.Plot.Add.Candlestick(scottCandles);
+            series.RisingColor = Color.FromHex("#2962FF");
+            series.FallingColor = Color.FromHex("#F23645");
+
+            // 4. AJOUT DU CROSSHAIR EN DERNIER (Premier plan)
+            _crosshair = MainPlot.Plot.Add.Crosshair(0, 0);
+
+            // Configuration explicite des lignes pour être sûr qu'elles s'affichent
+            // On force le blanc pour tester la visibilité
+            var lineColor = Color.FromHex("#FFFFFF");
+
+            _crosshair.VerticalLine.Color = lineColor;
+            _crosshair.VerticalLine.LineStyle.Width = 1;
+            _crosshair.VerticalLine.LineStyle.Pattern = LinePattern.Dashed;
+            _crosshair.VerticalLine.LabelStyle.IsVisible = false;
+
+            _crosshair.HorizontalLine.Color = lineColor;
+            _crosshair.HorizontalLine.LineStyle.Width = 1;
+            _crosshair.HorizontalLine.LineStyle.Pattern = LinePattern.Dashed;
+            _crosshair.HorizontalLine.LabelStyle.IsVisible = false;
+
+            // Masquer par défaut jusqu'au mouvement de souris
+            _crosshair.IsVisible = false;
+
+            // 5. Axe X (Dates)
+            MainPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
+            {
+                LabelFormatter = (value) =>
+                {
+                    int index = (int)Math.Round(value);
+                    if (index >= 0 && index < realDates.Length)
+                        return realDates[index].ToString("dd/MM\nHH:mm");
+                    return "";
+                }
+            };
+
+            // 6. Zoom
+            if (_viewModel.ShouldResetZoom)
+                MainPlot.Plot.Axes.AutoScale();
+            else
+                MainPlot.Plot.Axes.SetLimits(oldLimits);
+
+            MainPlot.Refresh();
+        });
+    }
 }
