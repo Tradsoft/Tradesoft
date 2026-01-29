@@ -1,9 +1,10 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging; 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Logging; 
+using TradeSoft.Core.Domain;
 
 namespace TradeSoft.Infrastructure.IO
 {
@@ -24,6 +25,30 @@ namespace TradeSoft.Infrastructure.IO
 
             _directoryPath = directoryPath;
             _logger = logger;
+        }
+
+        public IEnumerable<TickData> GetTicks(string symbol, DateTime start, DateTime end)
+        {
+            var loaders = GetLoaders(symbol, start, end);
+            long startTicks = start.Ticks;
+            long endTicks = end.Ticks;
+
+            foreach (var loader in loaders)
+            {
+                using (loader)
+                {
+                    int count = (int)loader.Count;
+                    for (int i = 0; i < count; i++)
+                    {
+                        TickData tick = loader.GetTick(i);
+
+                        if (tick.Timestamp >= startTicks && tick.Timestamp <= endTicks)
+                        {
+                            yield return tick;
+                        }
+                    }
+                }
+            }
         }
 
         public IEnumerable<BinaryTickLoader> GetLoaders(string symbol, DateTime start, DateTime end)

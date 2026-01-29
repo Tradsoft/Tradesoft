@@ -1,4 +1,6 @@
-﻿namespace TradeSoft.Core.DTO
+﻿using TradeSoft.Core.Domain;
+
+namespace TradeSoft.Core.DTO
 {
     public class BacktestConfig
     {
@@ -44,6 +46,7 @@
         public double MaxDrawdownPercent { get; set; }
         public List<TradeResultItem> Trades { get; set; } = new();
         public List<EquityPoint> EquityCurve { get; set; } = new();
+        public List<Bar> Bars { get; set; } = new();
     }
 
     public class TradeResultItem
