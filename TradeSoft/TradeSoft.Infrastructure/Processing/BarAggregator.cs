@@ -9,7 +9,9 @@ namespace TradeSoft.Infrastructure.Processing
     {
         private Bar? _currentBar;
         private DateTime _nextPeriodClose;
-        private readonly TimeSpan _timeframe = TimeSpan.FromMinutes(1);
+        private readonly TimeSpan _timeframe;
+        private double _lastValidPrice = 0;
+        private DateTime _lastTickTime = DateTime.MinValue;
 
         public BarAggregator(TimeSpan timeframe)
         {
@@ -19,7 +21,23 @@ namespace TradeSoft.Infrastructure.Processing
         protected override void OnProcess(TickContext context)
         {
             DateTime tickTime = new DateTime(context.Tick.Timestamp);
-            double price = context.Tick.MidPrice; 
+            double price = context.Tick.MidPrice;
+
+            if (price <= 0.0001) return;
+
+            bool massiveGap = (tickTime - _lastTickTime).TotalHours > 1;
+
+            if (!massiveGap && _lastValidPrice > 0)
+            {
+                double variation = Math.Abs(price - _lastValidPrice) / _lastValidPrice;
+                if (variation > 0.10)
+                {
+                    return;
+                }
+            }
+
+            _lastValidPrice = price;
+            _lastTickTime = tickTime;
 
             if (_currentBar == null)
             {
@@ -30,7 +48,6 @@ namespace TradeSoft.Infrastructure.Processing
             if (tickTime >= _nextPeriodClose)
             {
                 context.GeneratedBar = _currentBar;
-
                 StartNewBar(tickTime, price, context.Tick.Volume);
             }
             else
@@ -45,8 +62,10 @@ namespace TradeSoft.Infrastructure.Processing
 
         private void StartNewBar(DateTime tickTime, double price, int volume)
         {
-            var barTime = new DateTime(tickTime.Year, tickTime.Month, tickTime.Day,
-                                     tickTime.Hour, tickTime.Minute, 0);
+            long ticks = tickTime.Ticks;
+            long periodTicks = _timeframe.Ticks;
+            long roundedTicks = (ticks / periodTicks) * periodTicks;
+            var barTime = new DateTime(roundedTicks);
 
             _currentBar = new Bar
             {

@@ -46,6 +46,12 @@ namespace TradeSoft.Infrastructure.IO
             return new ReadOnlySpan<TickData>(_pointer, (int)count);
         }
 
+        public unsafe TickData GetTick(int index)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(BinaryTickLoader));
+            return ((TickData*)_pointer)[index];
+        }
+
         public void Dispose()
         {
             if (!_disposed)
