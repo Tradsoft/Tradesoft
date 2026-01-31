@@ -52,7 +52,7 @@ class Program
             return;
         }
 
-        Console.WriteLine($"✅ Dossier de données validé : {dossierData}");
+        Console.WriteLine($"Dossier de données validé : {dossierData}");
 
         try
         {
@@ -139,10 +139,10 @@ class Program
             Console.WriteLine($"Max Drawdown    : {result.MaxDrawdownPercent:F2}%");
             Console.WriteLine("========================================");
 
-            Console.WriteLine("\n💾 Sauvegarde en base de données...");
+            Console.WriteLine("\nSauvegarde en base de données...");
             var dbService = new DatabaseService();
             dbService.SaveBacktestResult(result, config);
-            Console.WriteLine("✅ Données sauvegardées dans 'tradesoft.db'");
+            Console.WriteLine("Données sauvegardées dans 'tradesoft.db'");
 
         }
         catch (Exception ex)

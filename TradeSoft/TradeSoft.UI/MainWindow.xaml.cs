@@ -28,6 +28,7 @@ public partial class MainWindow : Window
         _viewModel.BacktestCompleted += OnBacktestCompleted;
 
         SetupChartStyle();
+        SetupEquityChartStyle();
         SetupCrosshair();
     }
 
@@ -38,6 +39,15 @@ public partial class MainWindow : Window
         MainPlot.Plot.Grid.MajorLineColor = Color.FromHex("#1E222D");
         MainPlot.Plot.Axes.Color(Color.FromHex("#787B86"));
         MainPlot.Plot.Layout.Frameless();
+    }
+
+    private void SetupEquityChartStyle()
+    {
+        EquityPlot.Plot.FigureBackground.Color = Color.FromHex("#131722");
+        EquityPlot.Plot.DataBackground.Color = Color.FromHex("#131722");
+        EquityPlot.Plot.Grid.MajorLineColor = Color.FromHex("#1E222D");
+        EquityPlot.Plot.Axes.Color(Color.FromHex("#787B86"));
+        EquityPlot.Plot.Layout.Frameless();
     }
 
     private void SetupCrosshair()
@@ -106,6 +116,8 @@ public partial class MainWindow : Window
         {
             MainPlot.Plot.Clear();
             MainPlot.Refresh();
+            EquityPlot.Plot.Clear();
+            EquityPlot.Refresh();
             _currentBars = null;
             return;
         }
@@ -127,6 +139,68 @@ public partial class MainWindow : Window
             var series = MainPlot.Plot.Add.Candlestick(scottCandles);
             series.RisingColor = Color.FromHex("#2962FF");
             series.FallingColor = Color.FromHex("#F23645");
+
+            // AFFICHAGE DES TRADES (TRIANGLES)
+            if (result.Trades != null && result.Trades.Count > 0)
+            {
+                var buyTrades = new List<(double x, double y)>();
+                var sellTrades = new List<(double x, double y)>();
+
+                foreach (var trade in result.Trades)
+                {
+                    // Trouver l'index de la barre correspondante
+                    int barIndex = -1;
+                    for (int i = 0; i < result.Bars.Count; i++)
+                    {
+                        if (result.Bars[i].Timestamp >= trade.Time)
+                        {
+                            barIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (barIndex >= 0 && barIndex < result.Bars.Count)
+                    {
+                        var bar = result.Bars[barIndex];
+                        if (trade.Side.ToUpper() == "BUY")
+                        {
+                            // Triangle vert en bas de la bougie
+                            buyTrades.Add((barIndex, bar.Low * 0.9995));
+                        }
+                        else if (trade.Side.ToUpper() == "SELL")
+                        {
+                            // Triangle rouge en haut de la bougie
+                            sellTrades.Add((barIndex, bar.High * 1.0005));
+                        }
+                    }
+                }
+
+                // Afficher les triangles d'achat (vert, pointant vers le haut)
+                if (buyTrades.Count > 0)
+                {
+                    var buyScatter = MainPlot.Plot.Add.Scatter(
+                        buyTrades.Select(t => t.x).ToArray(),
+                        buyTrades.Select(t => t.y).ToArray()
+                    );
+                    buyScatter.Color = Color.FromHex("#26A69A"); // Vert
+                    buyScatter.MarkerSize = 12;
+                    buyScatter.MarkerShape = MarkerShape.FilledTriangleUp;
+                    buyScatter.LineWidth = 0;
+                }
+
+                // Afficher les triangles de vente (rouge, pointant vers le bas)
+                if (sellTrades.Count > 0)
+                {
+                    var sellScatter = MainPlot.Plot.Add.Scatter(
+                        sellTrades.Select(t => t.x).ToArray(),
+                        sellTrades.Select(t => t.y).ToArray()
+                    );
+                    sellScatter.Color = Color.FromHex("#EF5350"); // Rouge
+                    sellScatter.MarkerSize = 12;
+                    sellScatter.MarkerShape = MarkerShape.FilledTriangleDown;
+                    sellScatter.LineWidth = 0;
+                }
+            }
 
             _crosshair = MainPlot.Plot.Add.Crosshair(0, 0);
 
@@ -161,6 +235,45 @@ public partial class MainWindow : Window
                 MainPlot.Plot.Axes.SetLimits(oldLimits);
 
             MainPlot.Refresh();
+
+            // === EQUITY CURVE ===
+            EquityPlot.Plot.Clear();
+
+            System.Diagnostics.Debug.WriteLine($"EquityCurve Count: {result.EquityCurve?.Count ?? 0}");
+            
+            if (result.EquityCurve != null && result.EquityCurve.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"Drawing equity curve with {result.EquityCurve.Count} points");
+                
+                double[] xValues = Enumerable.Range(0, result.EquityCurve.Count).Select(i => (double)i).ToArray();
+                double[] yValues = result.EquityCurve.Select(e => e.Value).ToArray();
+
+                System.Diagnostics.Debug.WriteLine($"Equity range: {yValues.Min()} to {yValues.Max()}");
+
+                var equityLine = EquityPlot.Plot.Add.Scatter(xValues, yValues);
+                equityLine.Color = Color.FromHex("#2962FF");
+                equityLine.LineWidth = 2;
+                equityLine.MarkerSize = 0;
+
+                EquityPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
+                {
+                    LabelFormatter = (value) =>
+                    {
+                        int index = (int)Math.Round(value);
+                        if (index >= 0 && index < result.EquityCurve.Count)
+                            return result.EquityCurve[index].Time.ToString("dd/MM\nHH:mm");
+                        return "";
+                    }
+                };
+
+                EquityPlot.Plot.Axes.AutoScale();
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("No equity curve data to display");
+            }
+
+            EquityPlot.Refresh();
         });
     }
 }

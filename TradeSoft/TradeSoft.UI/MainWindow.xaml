@@ -74,6 +74,88 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <TextBlock Text="RISK MANAGEMENT" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="0,20,0,10"/>
+                        
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Initial Cash" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding InitialCash, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Right"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Leverage" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding Leverage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Right"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Min Lot Size" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding MinLotSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Right"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Max Risk %" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding MaxRiskPerTrade, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Right"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Max Positions" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding MaxPositions, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Right"/>
+                        </Grid>
+
+                        <Button Content="RUN BACKTEST" 
+                                Command="{Binding RunBacktestCommand}"
+                                Height="40" 
+                                Margin="0,20,0,0"
+                                Background="#2962FF" 
+                                Foreground="White" 
+                                FontWeight="Bold" 
+                                FontSize="12"
+                                BorderThickness="0"
+                                Cursor="Hand">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" 
+                                                        CornerRadius="4"
+                                                        BorderThickness="0">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#1E53E5"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#1A4AC9"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -100,11 +182,26 @@
             </Border>
 
             <Grid Grid.Row="1">
-                <scott:WpfPlot x:Name="MainPlot"/>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="6*"/>
+                    <RowDefinition Height="4*"/>
+                </Grid.RowDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,5,0,0" IsHitTestVisible="False">
-                    <TextBlock x:Name="TxtOHLC" Text="" Foreground="#D1D4DC" FontSize="12" FontFamily="Consolas"/>
-                </StackPanel>
+                <Grid Grid.Row="0">
+                    <scott:WpfPlot x:Name="MainPlot"/>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,5,0,0" IsHitTestVisible="False">
+                        <TextBlock x:Name="TxtOHLC" Text="" Foreground="#D1D4DC" FontSize="12" FontFamily="Consolas"/>
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1" BorderBrush="#2B2B2B" BorderThickness="0,1,0,0">
+                    <Grid Background="#131722">
+                        <scott:WpfPlot x:Name="EquityPlot"/>
+                        <TextBlock Text="EQUITY CURVE" Foreground="#5D606B" FontSize="10" FontWeight="Bold" 
+                                   HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10,5" IsHitTestVisible="False"/>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
     </Grid>
