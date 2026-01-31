@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using TradeSoft.Core.DTO;
 using TradeSoft.UI.Services;
 
@@ -42,9 +43,80 @@ namespace TradeSoft.UI.ViewModels
             set { _selectedTimeframe = value; OnPropertyChanged(); TriggerBacktest(resetZoom: true); }
         }
 
+        // Risk Management Properties
+        private double _initialCash = 10000.0;
+        public double InitialCash
+        {
+            get => _initialCash;
+            set 
+            { 
+                if (Math.Abs(_initialCash - value) > 0.01)
+                {
+                    _initialCash = value; 
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private double _leverage = 30.0;
+        public double Leverage
+        {
+            get => _leverage;
+            set 
+            { 
+                if (Math.Abs(_leverage - value) > 0.01)
+                {
+                    _leverage = value; 
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private double _minLotSize = 100.0;
+        public double MinLotSize
+        {
+            get => _minLotSize;
+            set 
+            { 
+                if (Math.Abs(_minLotSize - value) > 0.01)
+                {
+                    _minLotSize = value; 
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private double _maxRiskPerTrade = 1.0;
+        public double MaxRiskPerTrade
+        {
+            get => _maxRiskPerTrade;
+            set 
+            { 
+                if (Math.Abs(_maxRiskPerTrade - value) > 0.01)
+                {
+                    _maxRiskPerTrade = value; 
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private int _maxPositions = 5;
+        public int MaxPositions
+        {
+            get => _maxPositions;
+            set 
+            { 
+                if (_maxPositions != value)
+                {
+                    _maxPositions = value; 
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         public ObservableCollection<string> StrategyNames { get; } = new()
         {
-            "RSI", "MovingAverageCrossover", "MeanReversion", "Breakout"
+            "RSI", "MAC", "MeanReversion", "Breakout"
         };
 
         private string _selectedStrategyName = "RSI";
@@ -71,11 +143,32 @@ namespace TradeSoft.UI.ViewModels
         public event EventHandler<BacktestResult>? BacktestCompleted;
         public bool ShouldResetZoom { get; private set; }
 
+        public ICommand RunBacktestCommand { get; }
+
         public MainViewModel()
         {
             _backtestService = new BacktestService();
+            RunBacktestCommand = new RelayCommand(async () => await RunBacktestAsync());
             GenerateParameters();
-            Task.Delay(500).ContinueWith(_ => TriggerBacktest(resetZoom: true));
+            
+            // Lancer le backtest initial après un délai pour laisser l'UI se charger
+            Task.Delay(500).ContinueWith(_ => 
+            {
+                try
+                {
+                    TriggerBacktest(resetZoom: true);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error in initial backtest: {ex}");
+                    StatusText = $"Erreur initialisation: {ex.Message}";
+                }
+            });
+        }
+
+        public async Task RunBacktestAsync()
+        {
+            await TriggerBacktest(resetZoom: true);
         }
 
         private void GenerateParameters()
@@ -90,7 +183,7 @@ namespace TradeSoft.UI.ViewModels
             }
         }
 
-        private async void TriggerBacktest(bool resetZoom)
+        private async Task TriggerBacktest(bool resetZoom)
         {
             if (IsBusy) return;
             IsBusy = true;
@@ -105,7 +198,12 @@ namespace TradeSoft.UI.ViewModels
                     EndDate = EndDate,
                     Timeframe = SelectedTimeframe,
                     Strategy = Enum.Parse<StrategyType>(_selectedStrategyName),
-                    StrategyParameters = new Dictionary<string, object>()
+                    StrategyParameters = new Dictionary<string, object>(),
+                    InitialCash = InitialCash,
+                    Leverage = Leverage,
+                    MinLotSize = MinLotSize,
+                    MaxRiskPerTradePercent = MaxRiskPerTrade,
+                    MaxConcurrentPositions = MaxPositions
                 };
                 foreach (var p in Parameters) config.StrategyParameters[p.Name] = p.Value;
 
@@ -117,6 +215,7 @@ namespace TradeSoft.UI.ViewModels
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Backtest error: {ex}");
                 StatusText = $"Erreur : {ex.Message}";
             }
             finally
@@ -130,7 +229,7 @@ namespace TradeSoft.UI.ViewModels
             return strategyName switch
             {
                 "RSI" => new() { { "Period", 14 }, { "Oversold", 30 }, { "Overbought", 70 }, { "Lot", 1.0 } },
-                "MovingAverageCrossover" => new() { { "Short Period", 20 }, { "Long Period", 50 }, { "Lot", 1.0 } },
+                "MAC" => new() { { "Short Period", 20 }, { "Long Period", 50 }, { "Lot", 1.0 } },
                 "MeanReversion" => new() { { "Period", 20 }, { "K", 2.0 }, { "Lot", 1.0 } },
                 "Breakout" => new() { { "Lookback", 20 }, { "Lot", 1.0 } },
                 _ => new()
@@ -164,5 +263,27 @@ namespace TradeSoft.UI.ViewModels
         public StrategyParameterViewModel(string name, double defaultValue) { Name = name; Value = defaultValue; }
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    public class RelayCommand : ICommand
+    {
+        private readonly Func<Task> _execute;
+        private readonly Func<bool>? _canExecute;
+
+        public RelayCommand(Func<Task> execute, Func<bool>? canExecute = null)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute;
+        }
+
+        public event EventHandler? CanExecuteChanged
+        {
+            add { CommandManager.RequerySuggested += value; }
+            remove { CommandManager.RequerySuggested -= value; }
+        }
+
+        public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
+
+        public async void Execute(object? parameter) => await _execute();
     }
 }
