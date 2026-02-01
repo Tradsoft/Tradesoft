@@ -26,11 +26,13 @@ namespace TradeSoft.Engine.Management
         {
             UpdateDailyState(context.Tick.Timestamp);
 
+            // 1. Vérification des coupe-circuits globaux
             if (CheckCircuitBreakers(context))
             {
-                return; 
+                return; // Stop tout si un coupe-circuit est actif
             }
 
+            // 2. Traitement des nouveaux ordres
             ProcessNewOrders(context);
         }
 
@@ -48,13 +50,18 @@ namespace TradeSoft.Engine.Management
 
         private bool CheckCircuitBreakers(TickContext context)
         {
-            if (IsMaxDrawdownReached())
+            // --- A. Max Drawdown ---
+            if (IsMaxDrawdownReached(out double currentDD))
             {
-                if (context.NewOrders.Count > 0) LogRejection("Max Drawdown Reached");
-                context.NewOrders.Clear();
+                // On logue seulement s'il y avait des ordres à passer
+                if (context.NewOrders.Count > 0)
+                    LogRejection($"Max Drawdown Atteint: {currentDD:F2}% (Limite: {_config.MaxDrawdownPercent}%)");
+
+                context.NewOrders.Clear(); // On supprime tout
                 return true;
             }
 
+            // --- B. Perte Journalière ---
             double currentEquity = _portfolioManager.CurrentPortfolio.Equity;
             double dailyLossLimit = _startOfDayEquity * (1.0 - (_config.MaxDailyLossPercent / 100.0));
 
@@ -65,7 +72,9 @@ namespace TradeSoft.Engine.Management
 
             if (_dailyLossLimitReached)
             {
-                if (context.NewOrders.Count > 0) LogRejection("Daily Loss Limit Reached");
+                if (context.NewOrders.Count > 0)
+                    LogRejection($"Limite Perte Journalière. Equity: {currentEquity:F2}, Seuil: {dailyLossLimit:F2}");
+
                 context.NewOrders.Clear();
                 return true;
             }
@@ -77,29 +86,34 @@ namespace TradeSoft.Engine.Management
         {
             int currentPositions = _portfolioManager.OpenPositionCount;
 
+            // Boucle inversée pour suppression sûre
             for (int i = context.NewOrders.Count - 1; i >= 0; i--)
             {
                 var order = context.NewOrders[i];
 
+                // Les ordres de sortie (SL/TP) ne sont pas filtrés par le risque d'ouverture
                 if (IsExitOrder(order)) continue;
 
+                // --- C. Max Positions Simultanées ---
                 if (currentPositions >= _config.MaxConcurrentPositions)
                 {
-                    LogRejection($"Max Positions Reached ({currentPositions}/{_config.MaxConcurrentPositions})");
+                    LogRejection($"Max Positions Atteint ({currentPositions}/{_config.MaxConcurrentPositions}) pour {order.Symbol}");
                     context.NewOrders.RemoveAt(i);
                     continue;
                 }
 
-                if (!CheckRiskRewardRatio(order, context.Tick))
+                // --- D. Ratio Risque/Rendement ---
+                if (!CheckRiskRewardRatio(order, context.Tick, out string rrReason))
                 {
-                    LogRejection("Bad Risk/Reward Ratio");
+                    LogRejection($"Refus Risk/Reward: {rrReason}");
                     context.NewOrders.RemoveAt(i);
                     continue;
                 }
 
-                if (!ValidateAndResizeOrder(order, context.Tick))
+                // --- E. Dimensionnement (Sizing) ---
+                if (!ValidateAndResizeOrder(order, context.Tick, out string sizeReason))
                 {
-                    LogRejection("Sizing/Margin Failed (Price 0 or Insufficient Funds)");
+                    LogRejection($"Erreur Taille: {sizeReason}");
                     context.NewOrders.RemoveAt(i);
                 }
                 else
@@ -109,8 +123,10 @@ namespace TradeSoft.Engine.Management
             }
         }
 
-        private bool CheckRiskRewardRatio(Order order, TickData tick)
+        private bool CheckRiskRewardRatio(Order order, TickData tick, out string reason)
         {
+            reason = string.Empty;
+            // Pas de TP/SL = Pas de calcul de ratio possible (on laisse passer ou on bloque selon stratégie)
             if (!order.StopLoss.HasValue || !order.TakeProfit.HasValue) return true;
 
             double entryPrice = (order.Type == OrderType.Limit)
@@ -120,41 +136,70 @@ namespace TradeSoft.Engine.Management
             double risk = Math.Abs(entryPrice - order.StopLoss.Value);
             double reward = Math.Abs(order.TakeProfit.Value - entryPrice);
 
-            if (risk <= 0) return false;
-            return (reward / risk) >= _config.MinRiskRewardRatio;
+            if (risk <= 0.00001)
+            {
+                reason = "Distance SL nulle";
+                return false;
+            }
+
+            double ratio = reward / risk;
+            if (ratio < _config.MinRiskRewardRatio)
+            {
+                reason = $"Ratio {ratio:F2} < Min {_config.MinRiskRewardRatio} (Risk:{risk:F4}, Reward:{reward:F4})";
+                return false;
+            }
+
+            return true;
         }
 
-        private bool ValidateAndResizeOrder(Order order, TickData tick)
+        private bool ValidateAndResizeOrder(Order order, TickData tick, out string reason)
         {
+            reason = string.Empty;
             double equity = _portfolioManager.CurrentPortfolio.Equity;
             double currentPrice = (order.Side == Side.Buy) ? tick.Ask : tick.Bid;
 
-            if (currentPrice <= 0.00001) return false;
+            if (currentPrice <= 0.00001)
+            {
+                reason = "Prix invalide (0)";
+                return false;
+            }
 
-            double quantityByRisk = 0;
+            // 1. Calcul taille selon Risque (SL)
+            double quantityByRisk = double.MaxValue;
 
             if (order.StopLoss.HasValue)
             {
+                // Ex: Je veux risquer 1% de mon capital
                 double riskPerTradeCash = equity * (_config.MaxRiskPerTradePercent / 100.0);
-                double entryPrice = (order.Type == OrderType.Limit) ? order.Price : currentPrice;
 
+                double entryPrice = (order.Type == OrderType.Limit) ? order.Price : currentPrice;
                 double slDistance = Math.Abs(entryPrice - order.StopLoss.Value);
-                if (slDistance < 0.0001) slDistance = 0.0001; 
+                if (slDistance < 0.0001) slDistance = 0.0001;
 
                 quantityByRisk = riskPerTradeCash / slDistance;
             }
             else
             {
-                quantityByRisk = (equity * _config.DefaultRiskNoSL * _config.DefaultLeverageNoSL) / currentPrice;
+                // Fallback si pas de SL (valeurs par défaut)
+                // Si votre Config n'a pas ces champs, mettez des valeurs fixes ici :
+                double defaultRisk = 0.01; // 1%
+                double defaultLev = 1.0;
+
+                // Si dispo dans config : _config.DefaultRiskNoSL
+                quantityByRisk = (equity * defaultRisk * defaultLev) / currentPrice;
             }
 
+            // 2. Calcul taille selon Marge (Levier)
             double maxBuyingPower = equity * _config.Leverage;
             double quantityByMargin = maxBuyingPower / currentPrice;
 
+            // On prend le plus restrictif
             double finalQuantity = Math.Min(quantityByRisk, quantityByMargin);
 
+            // 3. Vérification MinLotSize
             if (finalQuantity < _config.MinLotSize)
             {
+                reason = $"Qté {finalQuantity:F2} < Min {_config.MinLotSize}. (Limité par: {(quantityByRisk < quantityByMargin ? "Risque" : "Marge")})";
                 return false;
             }
 
@@ -162,22 +207,28 @@ namespace TradeSoft.Engine.Management
             return true;
         }
 
-        private bool IsMaxDrawdownReached()
+        private bool IsMaxDrawdownReached(out double currentDD)
         {
             double peak = _portfolioManager.PeakEquity;
-            return peak > 0 && ((peak - _portfolioManager.CurrentPortfolio.Equity) / peak * 100 >= _config.MaxDrawdownPercent);
+            currentDD = 0;
+            if (peak <= 0) return false;
+
+            currentDD = (peak - _portfolioManager.CurrentPortfolio.Equity) / peak * 100;
+            return currentDD >= _config.MaxDrawdownPercent;
         }
+
+        // Surcharge simple
+        private bool IsMaxDrawdownReached() => IsMaxDrawdownReached(out _);
 
         private bool IsExitOrder(Order order)
         {
-            return false;
+            return order.Comment != null && (order.Comment.Contains("SL_") || order.Comment.Contains("TP_"));
         }
 
         private void LogRejection(string reason)
         {
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine($"[RISK] Order Rejected: {reason}");
-            Console.ResetColor();
+            // ✅ Debug.WriteLine pour voir dans Visual Studio
+            System.Diagnostics.Debug.WriteLine($"❌ [REJET RISK] {reason}");
         }
     }
 }
