@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media;
+using System.Windows.Media; // Pour les couleurs WPF
 using ScottPlot;
 using ScottPlot.TickGenerators;
 using TradeSoft.Core.DTO;
 using TradeSoft.UI.ViewModels;
+using TradeSoft.Core.Domain;
 
+// Alias indispensables
 using Bar = TradeSoft.Core.Domain.Bar;
 using Color = ScottPlot.Color;
 
@@ -17,7 +19,6 @@ namespace TradeSoft.UI;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
-
     private List<Bar>? _currentBars;
     private ScottPlot.Plottables.Crosshair? _crosshair;
 
@@ -25,11 +26,159 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _viewModel = (MainViewModel)DataContext;
+
         _viewModel.BacktestCompleted += OnBacktestCompleted;
+        _viewModel.MarketDataLoaded += OnMarketDataLoaded;
 
         SetupChartStyle();
         SetupEquityChartStyle();
         SetupCrosshair();
+    }
+
+    private void OnMarketDataLoaded(object? sender, List<Bar> bars)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            UpdateMainChart(bars);
+            EquityPlot.Plot.Clear();
+            EquityPlot.Refresh();
+        });
+    }
+
+    private void OnBacktestCompleted(object? sender, BacktestResult result)
+    {
+        if (result.Bars == null || result.Bars.Count == 0) return;
+
+        Dispatcher.Invoke(() =>
+        {
+            // 1. Affiche les bougies
+            UpdateMainChart(result.Bars);
+
+            // 2. Affiche les trades (Marqueurs)
+            if (result.Trades != null && result.Trades.Count > 0)
+            {
+                // Calcul pour décaler les flèches et ne pas toucher les bougies
+                double avgHeight = result.Bars.Average(b => b.High - b.Low);
+                double offset = avgHeight * 1.5; // Marge confortable
+
+                var buyX = new List<double>();
+                var buyY = new List<double>();
+                var sellX = new List<double>();
+                var sellY = new List<double>();
+
+                foreach (var trade in result.Trades)
+                {
+                    // Trouver la bougie qui contient le temps du trade
+                    var closestBar = result.Bars.Select((b, i) => new { Bar = b, Index = i })
+                                                .Where(x => x.Bar.Timestamp <= trade.Time) // Prend la bougie qui a commencé avant le trade
+                                                .LastOrDefault();
+
+                    if (closestBar != null)
+                    {
+                        double xIndex = closestBar.Index;
+                        string side = trade.Side.ToString().ToUpper(); // Force majuscule
+
+                        if (side == "BUY")
+                        {
+                            buyX.Add(xIndex);
+                            // ACHAT : Triangle VERT en BAS (pointant vers le haut)
+                            // Position : Low - offset
+                            buyY.Add(closestBar.Bar.Low - offset);
+                        }
+                        else if (side == "SELL")
+                        {
+                            sellX.Add(xIndex);
+                            // VENTE : Triangle ROUGE en HAUT (pointant vers le bas)
+                            // Position : High + offset
+                            sellY.Add(closestBar.Bar.High + offset);
+                        }
+                    }
+                }
+
+                // Dessin des marqueurs Achat (Vert)
+                if (buyX.Any())
+                {
+                    var scat = MainPlot.Plot.Add.Scatter(buyX.ToArray(), buyY.ToArray());
+                    scat.LineWidth = 0;
+                    scat.MarkerStyle.Shape = MarkerShape.FilledTriangleUp;
+                    scat.MarkerStyle.Size = 12;
+                    scat.Color = Color.FromHex("#00E676"); // Vert
+                    scat.LegendText = "Buy"; // Pour la légende éventuelle
+                }
+
+                // Dessin des marqueurs Vente (Rouge)
+                if (sellX.Any())
+                {
+                    var scat = MainPlot.Plot.Add.Scatter(sellX.ToArray(), sellY.ToArray());
+                    scat.LineWidth = 0;
+                    scat.MarkerStyle.Shape = MarkerShape.FilledTriangleDown;
+                    scat.MarkerStyle.Size = 12;
+                    scat.Color = Color.FromHex("#FF1744"); // Rouge
+                    scat.LegendText = "Sell";
+                }
+            }
+
+            // 3. Ré-ajoute le Crosshair et Update
+            SetupCrosshair();
+            MainPlot.Refresh();
+
+            // 4. Affiche l'Equity
+            DrawEquityCurve(result);
+        });
+    }
+
+    private void UpdateMainChart(List<Bar> bars)
+    {
+        _currentBars = bars;
+        MainPlot.Plot.Clear();
+
+        var oldLimits = MainPlot.Plot.Axes.GetLimits();
+        var candles = bars.Select((b, i) => new OHLC(b.Open, b.High, b.Low, b.Close, DateTime.FromOADate(i), TimeSpan.FromDays(1))).ToList();
+
+        var series = MainPlot.Plot.Add.Candlestick(candles);
+        series.RisingColor = Color.FromHex("#2962FF");
+        series.FallingColor = Color.FromHex("#F23645");
+
+        DateTime[] dates = bars.Select(b => b.Timestamp).ToArray();
+        MainPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
+        {
+            LabelFormatter = (value) => {
+                int idx = (int)Math.Round(value);
+                if (idx >= 0 && idx < dates.Length) return dates[idx].ToString("dd/MM\nHH:mm");
+                return "";
+            }
+        };
+
+        if (_viewModel.ShouldResetZoom) MainPlot.Plot.Axes.AutoScale();
+        else MainPlot.Plot.Axes.SetLimits(oldLimits);
+
+        // Note: Le Refresh est fait par l'appelant pour éviter le clignotement
+    }
+
+    private void DrawEquityCurve(BacktestResult result)
+    {
+        EquityPlot.Plot.Clear();
+        if (result.EquityCurve != null && result.EquityCurve.Count > 0)
+        {
+            var x = Enumerable.Range(0, result.EquityCurve.Count).Select(i => (double)i).ToArray();
+            var y = result.EquityCurve.Select(e => e.Value).ToArray();
+
+            var line = EquityPlot.Plot.Add.ScatterLine(x, y);
+            line.Color = Color.FromHex("#2962FF");
+            line.LineWidth = 2;
+            line.MarkerSize = 0; // Pas de points, juste la ligne
+
+            EquityPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
+            {
+                LabelFormatter = (value) => {
+                    int idx = (int)Math.Round(value);
+                    if (idx >= 0 && idx < result.EquityCurve.Count) return result.EquityCurve[idx].Time.ToString("dd/MM");
+                    return "";
+                }
+            };
+            EquityPlot.Plot.Axes.AutoScale();
+        }
+        EquityPlot.Refresh();
     }
 
     private void SetupChartStyle()
@@ -52,19 +201,40 @@ public partial class MainWindow : Window
 
     private void SetupCrosshair()
     {
+        if (_crosshair != null)
+        {
+            MainPlot.Plot.Remove(_crosshair);
+        }
+
         _crosshair = MainPlot.Plot.Add.Crosshair(0, 0);
         _crosshair.IsVisible = false;
 
-        _crosshair.LineColor = Color.FromHex("#787B86");
-        _crosshair.LinePattern = LinePattern.Dashed;
-        _crosshair.LineWidth = 1;
+        var grey = Color.FromHex("#787B86");
 
-        _crosshair.HorizontalLine.IsVisible = false;
-        _crosshair.VerticalLine.IsVisible = false;
+        // Configuration compatible ScottPlot 5
+        _crosshair.VerticalLine.LineStyle.Color = grey;
+        _crosshair.VerticalLine.LineStyle.Pattern = LinePattern.Dashed;
+        _crosshair.VerticalLine.LabelStyle.IsVisible = false;
 
+        _crosshair.HorizontalLine.LineStyle.Color = grey;
+        _crosshair.HorizontalLine.LineStyle.Pattern = LinePattern.Dashed;
+        _crosshair.HorizontalLine.LabelStyle.IsVisible = false;
+
+        // Réinitialisation des événements souris
+        MainPlot.MouseMove -= MainPlot_MouseMove;
         MainPlot.MouseMove += MainPlot_MouseMove;
-        MainPlot.MouseEnter += (s, e) => { if (_crosshair != null) _crosshair.IsVisible = true; };
-        MainPlot.MouseLeave += (s, e) => { if (_crosshair != null) _crosshair.IsVisible = false; MainPlot.Refresh(); };
+        MainPlot.MouseLeave -= MainPlot_MouseLeave;
+        MainPlot.MouseLeave += MainPlot_MouseLeave;
+    }
+
+    private void MainPlot_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_crosshair != null)
+        {
+            _crosshair.IsVisible = false;
+            TxtOHLC.Text = "";
+            MainPlot.Refresh();
+        }
     }
 
     private void MainPlot_MouseMove(object sender, MouseEventArgs e)
@@ -72,32 +242,26 @@ public partial class MainWindow : Window
         if (_crosshair == null || _currentBars == null || _currentBars.Count == 0) return;
 
         Point mousePoint = e.GetPosition(MainPlot);
-
         var source = PresentationSource.FromVisual(MainPlot);
-        double dpiScaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-        double dpiScaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+        double dpiX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        double dpiY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
 
-        float pixelX = (float)(mousePoint.X * dpiScaleX);
-        float pixelY = (float)(mousePoint.Y * dpiScaleY);
+        var coords = MainPlot.Plot.GetCoordinates((float)(mousePoint.X * dpiX), (float)(mousePoint.Y * dpiY));
 
-        var coordinates = MainPlot.Plot.GetCoordinates(pixelX, pixelY);
-
-        _crosshair.X = coordinates.X;
-        _crosshair.Y = coordinates.Y;
+        _crosshair.X = coords.X;
+        _crosshair.Y = coords.Y;
         _crosshair.IsVisible = true;
 
-        int index = (int)Math.Round(coordinates.X);
-
-        if (index >= 0 && index < _currentBars.Count)
+        int idx = (int)Math.Round(coords.X);
+        if (idx >= 0 && idx < _currentBars.Count)
         {
-            var bar = _currentBars[index];
+            var bar = _currentBars[idx];
             UpdateOHLCDisplay(bar);
         }
         else
         {
             TxtOHLC.Text = "";
         }
-
         MainPlot.Refresh();
     }
 
@@ -105,175 +269,21 @@ public partial class MainWindow : Window
     {
         double change = bar.Close - bar.Open;
         double percent = (change / bar.Open) * 100;
+        string sign = percent >= 0 ? "+" : "";
 
-        string text = $"Date: {bar.Timestamp:dd/MM HH:mm}   O: {bar.Open:F5}   H: {bar.High:F5}   L: {bar.Low:F5}   C: {bar.Close:F5}   ";
-        TxtOHLC.Text = text + $"({(change >= 0 ? "+" : "")}{percent:F2}%)";
-    }
+        // Format: Date + Prix (5 décimales) + %
+        string text = $"📅 {bar.Timestamp:dd/MM HH:mm}   " +
+                      $"O: {bar.Open:F5}   " +
+                      $"H: {bar.High:F5}   " +
+                      $"L: {bar.Low:F5}   " +
+                      $"C: {bar.Close:F5}   " +
+                      $"({sign}{percent:F2}%)";
 
-    private void OnBacktestCompleted(object? sender, BacktestResult result)
-    {
-        if (result.Bars == null || result.Bars.Count == 0)
-        {
-            MainPlot.Plot.Clear();
-            MainPlot.Refresh();
-            EquityPlot.Plot.Clear();
-            EquityPlot.Refresh();
-            _currentBars = null;
-            return;
-        }
+        TxtOHLC.Text = text;
 
-        _currentBars = result.Bars;
-
-        Application.Current.Dispatcher.Invoke(() =>
-        {
-            var oldLimits = MainPlot.Plot.Axes.GetLimits();
-            var scottCandles = result.Bars.Select((b, i) => new OHLC(
-                b.Open, b.High, b.Low, b.Close,
-                DateTime.FromOADate(i),
-                TimeSpan.FromDays(0.8)
-            )).ToList();
-            DateTime[] realDates = result.Bars.Select(b => b.Timestamp).ToArray();
-
-            MainPlot.Plot.Clear();
-
-            var series = MainPlot.Plot.Add.Candlestick(scottCandles);
-            series.RisingColor = Color.FromHex("#2962FF");
-            series.FallingColor = Color.FromHex("#F23645");
-
-            // AFFICHAGE DES TRADES (TRIANGLES)
-            if (result.Trades != null && result.Trades.Count > 0)
-            {
-                var buyTrades = new List<(double x, double y)>();
-                var sellTrades = new List<(double x, double y)>();
-
-                foreach (var trade in result.Trades)
-                {
-                    // Trouver l'index de la barre correspondante
-                    int barIndex = -1;
-                    for (int i = 0; i < result.Bars.Count; i++)
-                    {
-                        if (result.Bars[i].Timestamp >= trade.Time)
-                        {
-                            barIndex = i;
-                            break;
-                        }
-                    }
-
-                    if (barIndex >= 0 && barIndex < result.Bars.Count)
-                    {
-                        var bar = result.Bars[barIndex];
-                        if (trade.Side.ToUpper() == "BUY")
-                        {
-                            // Triangle vert en bas de la bougie
-                            buyTrades.Add((barIndex, bar.Low * 0.9995));
-                        }
-                        else if (trade.Side.ToUpper() == "SELL")
-                        {
-                            // Triangle rouge en haut de la bougie
-                            sellTrades.Add((barIndex, bar.High * 1.0005));
-                        }
-                    }
-                }
-
-                // Afficher les triangles d'achat (vert, pointant vers le haut)
-                if (buyTrades.Count > 0)
-                {
-                    var buyScatter = MainPlot.Plot.Add.Scatter(
-                        buyTrades.Select(t => t.x).ToArray(),
-                        buyTrades.Select(t => t.y).ToArray()
-                    );
-                    buyScatter.Color = Color.FromHex("#26A69A"); // Vert
-                    buyScatter.MarkerSize = 12;
-                    buyScatter.MarkerShape = MarkerShape.FilledTriangleUp;
-                    buyScatter.LineWidth = 0;
-                }
-
-                // Afficher les triangles de vente (rouge, pointant vers le bas)
-                if (sellTrades.Count > 0)
-                {
-                    var sellScatter = MainPlot.Plot.Add.Scatter(
-                        sellTrades.Select(t => t.x).ToArray(),
-                        sellTrades.Select(t => t.y).ToArray()
-                    );
-                    sellScatter.Color = Color.FromHex("#EF5350"); // Rouge
-                    sellScatter.MarkerSize = 12;
-                    sellScatter.MarkerShape = MarkerShape.FilledTriangleDown;
-                    sellScatter.LineWidth = 0;
-                }
-            }
-
-            _crosshair = MainPlot.Plot.Add.Crosshair(0, 0);
-
-            var lineColor = Color.FromHex("#FFFFFF");
-
-            _crosshair.VerticalLine.Color = lineColor;
-            _crosshair.VerticalLine.LineStyle.Width = 1;
-            _crosshair.VerticalLine.LineStyle.Pattern = LinePattern.Dashed;
-            _crosshair.VerticalLine.LabelStyle.IsVisible = false;
-
-            _crosshair.HorizontalLine.Color = lineColor;
-            _crosshair.HorizontalLine.LineStyle.Width = 1;
-            _crosshair.HorizontalLine.LineStyle.Pattern = LinePattern.Dashed;
-            _crosshair.HorizontalLine.LabelStyle.IsVisible = false;
-
-            _crosshair.IsVisible = false;
-
-            MainPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
-            {
-                LabelFormatter = (value) =>
-                {
-                    int index = (int)Math.Round(value);
-                    if (index >= 0 && index < realDates.Length)
-                        return realDates[index].ToString("dd/MM\nHH:mm");
-                    return "";
-                }
-            };
-
-            if (_viewModel.ShouldResetZoom)
-                MainPlot.Plot.Axes.AutoScale();
-            else
-                MainPlot.Plot.Axes.SetLimits(oldLimits);
-
-            MainPlot.Refresh();
-
-            // === EQUITY CURVE ===
-            EquityPlot.Plot.Clear();
-
-            System.Diagnostics.Debug.WriteLine($"EquityCurve Count: {result.EquityCurve?.Count ?? 0}");
-            
-            if (result.EquityCurve != null && result.EquityCurve.Count > 0)
-            {
-                System.Diagnostics.Debug.WriteLine($"Drawing equity curve with {result.EquityCurve.Count} points");
-                
-                double[] xValues = Enumerable.Range(0, result.EquityCurve.Count).Select(i => (double)i).ToArray();
-                double[] yValues = result.EquityCurve.Select(e => e.Value).ToArray();
-
-                System.Diagnostics.Debug.WriteLine($"Equity range: {yValues.Min()} to {yValues.Max()}");
-
-                var equityLine = EquityPlot.Plot.Add.Scatter(xValues, yValues);
-                equityLine.Color = Color.FromHex("#2962FF");
-                equityLine.LineWidth = 2;
-                equityLine.MarkerSize = 0;
-
-                EquityPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
-                {
-                    LabelFormatter = (value) =>
-                    {
-                        int index = (int)Math.Round(value);
-                        if (index >= 0 && index < result.EquityCurve.Count)
-                            return result.EquityCurve[index].Time.ToString("dd/MM\nHH:mm");
-                        return "";
-                    }
-                };
-
-                EquityPlot.Plot.Axes.AutoScale();
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine("No equity curve data to display");
-            }
-
-            EquityPlot.Refresh();
-        });
+        if (change >= 0)
+            TxtOHLC.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 166, 154));
+        else
+            TxtOHLC.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 83, 80));
     }
 }
