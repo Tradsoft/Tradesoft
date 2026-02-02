@@ -124,7 +124,7 @@ public partial class MainWindow : Window
                 }
 
                 MainPlot.Plot.ShowLegend();
-                MainPlot.Plot.Legend.Alignment = Alignment.LowerRight;
+                MainPlot.Plot.Legend.Alignment = Alignment.LowerLeft;
                 MainPlot.Plot.Legend.BackgroundColor = Color.FromHex("#1E222D").WithAlpha(200);
                 MainPlot.Plot.Legend.FontColor = Color.FromHex("#D1D4DC");
                 MainPlot.Plot.Legend.OutlineColor = Color.FromHex("#2B2B2B");
@@ -135,6 +135,11 @@ public partial class MainWindow : Window
 
             DrawEquityCurve(result);
             DisplayDetailedStats(result);
+
+            if (result.Logs != null)
+            {
+                _viewModel.LoadLogs(result.Logs);
+            }
         });
     }
 
@@ -214,11 +219,11 @@ public partial class MainWindow : Window
             switch (ind.Type)
             {
                 case "SMA": DrawSMA(bars, ind.Period); break;
-                case "EMA": DrawEMA(bars, ind.Period); break; // Nouveau
+                case "EMA": DrawEMA(bars, ind.Period); break;
                 case "Bands": DrawBollinger(bars, ind.Period, 2.0); break;
                 case "Breakout": DrawDonchian(bars, ind.Period); break;
-                case "RSI_Color": DrawRSIHighlights(bars, ind.Period); break; // Nouveau
-                case "PSAR": DrawParabolicSAR(bars); break; // Nouveau
+                case "RSI_Color": DrawRSIHighlights(bars, ind.Period); break; 
+                case "PSAR": DrawParabolicSAR(bars); break; 
             }
         }
     }
@@ -229,7 +234,6 @@ public partial class MainWindow : Window
         double[] xs = new double[bars.Count];
         double k = 2.0 / (period + 1);
 
-        // Initialisation avec SMA pour le premier point
         double sum = 0;
         for (int i = 0; i < period && i < bars.Count; i++) sum += bars[i].Close;
         double prevEma = sum / Math.Min(period, bars.Count);
@@ -249,7 +253,7 @@ public partial class MainWindow : Window
         }
 
         var line = MainPlot.Plot.Add.ScatterLine(xs, ema);
-        line.Color = Color.FromHex("#FF9800"); // Orange
+        line.Color = Color.FromHex("#FF9800");
         line.LineWidth = 2;
     }
 
@@ -260,23 +264,21 @@ public partial class MainWindow : Window
 
         for (int i = 0; i < bars.Count; i++)
         {
-            xs[i] = i; // Index simple pour s'aligner avec les bougies
+            xs[i] = i;
             if (i < period - 1)
             {
-                sma[i] = double.NaN; // Pas assez de données
+                sma[i] = double.NaN; 
             }
             else
             {
-                // Calcul moyenne simple
                 double sum = 0;
                 for (int j = 0; j < period; j++) sum += bars[i - j].Close;
                 sma[i] = sum / period;
             }
         }
 
-        // Dessin ScottPlot
         var line = MainPlot.Plot.Add.ScatterLine(xs, sma);
-        line.Color = period > 30 ? Color.FromHex("#FFA726") : Color.FromHex("#29B6F6"); // Orange pour long terme, Bleu ciel pour court terme
+        line.Color = period > 30 ? Color.FromHex("#FFA726") : Color.FromHex("#29B6F6"); 
         line.LineWidth = 2;
     }
 
@@ -284,7 +286,6 @@ public partial class MainWindow : Window
     {
         if (bars.Count < period) return;
 
-        // Calcul rapide du RSI
         double[] rsi = CalculateRSI(bars, period);
 
         var overboughtX = new List<double>();
@@ -294,40 +295,37 @@ public partial class MainWindow : Window
 
         for (int i = 0; i < bars.Count; i++)
         {
-            if (rsi[i] >= 70) // Surachat
+            if (rsi[i] >= 70) 
             {
                 overboughtX.Add(i);
-                overboughtY.Add(bars[i].High * 1.0005); // Juste au-dessus de la mèche
+                overboughtY.Add(bars[i].High * 1.0005); 
             }
-            else if (rsi[i] <= 30) // Survente
+            else if (rsi[i] <= 30) 
             {
                 oversoldX.Add(i);
-                oversoldY.Add(bars[i].Low * 0.9995); // Juste en-dessous de la mèche
+                oversoldY.Add(bars[i].Low * 0.9995);
             }
         }
 
-        // Marqueur Rouge au-dessus (Vente potentielle)
         if (overboughtX.Count > 0)
         {
             var sc = MainPlot.Plot.Add.Scatter(overboughtX.ToArray(), overboughtY.ToArray());
             sc.MarkerStyle.Shape = MarkerShape.FilledCircle;
             sc.MarkerStyle.Size = 5;
-            sc.Color = Color.FromHex("#FF1744"); // Rouge
+            sc.Color = Color.FromHex("#FF1744"); 
             sc.LineWidth = 0;
         }
 
-        // Marqueur Vert en-dessous (Achat potentiel)
         if (oversoldX.Count > 0)
         {
             var sc = MainPlot.Plot.Add.Scatter(oversoldX.ToArray(), oversoldY.ToArray());
             sc.MarkerStyle.Shape = MarkerShape.FilledCircle;
             sc.MarkerStyle.Size = 5;
-            sc.Color = Color.FromHex("#00E676"); // Vert
+            sc.Color = Color.FromHex("#00E676");
             sc.LineWidth = 0;
         }
     }
 
-    // Helper pour calculer le RSI
     private double[] CalculateRSI(List<Bar> bars, int period)
     {
         double[] rsi = new double[bars.Count];
@@ -369,15 +367,14 @@ public partial class MainWindow : Window
     {
         if (bars.Count < 2) return;
 
-        double af = 0.02; // Step
+        double af = 0.02;
         double maxAf = 0.2;
         double[] sar = new double[bars.Count];
         double[] xs = new double[bars.Count];
 
-        // Initialisation basique
         bool isBullish = true;
         sar[0] = bars[0].Low;
-        double ep = bars[0].High; // Extreme Point
+        double ep = bars[0].High; 
         double currentAf = af;
 
         for (int i = 1; i < bars.Count; i++)
@@ -385,13 +382,11 @@ public partial class MainWindow : Window
             xs[i] = i;
             double prevSar = sar[i - 1];
 
-            // Calcul SAR
             sar[i] = prevSar + currentAf * (ep - prevSar);
 
-            // Règles de renversement
             if (isBullish)
             {
-                if (bars[i].Low < sar[i]) // Renversement vers la baisse
+                if (bars[i].Low < sar[i]) 
                 {
                     isBullish = false;
                     sar[i] = ep;
@@ -405,13 +400,12 @@ public partial class MainWindow : Window
                         ep = bars[i].High;
                         currentAf = Math.Min(currentAf + af, maxAf);
                     }
-                    // Le SAR ne doit pas dépasser le Low des 2 bougies précédentes
                     sar[i] = Math.Min(sar[i], Math.Min(bars[i - 1].Low, bars[Math.Max(0, i - 2)].Low));
                 }
             }
             else
             {
-                if (bars[i].High > sar[i]) // Renversement vers la hausse
+                if (bars[i].High > sar[i]) 
                 {
                     isBullish = true;
                     sar[i] = ep;
@@ -425,7 +419,6 @@ public partial class MainWindow : Window
                         ep = bars[i].Low;
                         currentAf = Math.Min(currentAf + af, maxAf);
                     }
-                    // Le SAR ne doit pas descendre sous le High des 2 bougies précédentes
                     sar[i] = Math.Max(sar[i], Math.Max(bars[i - 1].High, bars[Math.Max(0, i - 2)].High));
                 }
             }
@@ -433,8 +426,8 @@ public partial class MainWindow : Window
 
         var scatter = MainPlot.Plot.Add.Scatter(xs, sar);
         scatter.MarkerStyle.Shape = MarkerShape.FilledCircle;
-        scatter.MarkerStyle.Size = 2; // Petits points discrets
-        scatter.Color = Color.FromHex("#787B86"); // Gris pro
+        scatter.MarkerStyle.Size = 2; 
+        scatter.Color = Color.FromHex("#787B86"); 
         scatter.LineWidth = 0;
     }
 
@@ -453,12 +446,10 @@ public partial class MainWindow : Window
             }
             else
             {
-                // 1. Moyenne
                 double sum = 0;
                 for (int j = 0; j < period; j++) sum += bars[i - j].Close;
                 double mean = sum / period;
 
-                // 2. Écart Type
                 double sumSq = 0;
                 for (int j = 0; j < period; j++)
                 {
@@ -473,7 +464,7 @@ public partial class MainWindow : Window
         }
 
         var line1 = MainPlot.Plot.Add.ScatterLine(xs, upper);
-        line1.Color = Color.FromHex("#AB47BC"); // Violet
+        line1.Color = Color.FromHex("#AB47BC"); 
         line1.LinePattern = LinePattern.Dashed;
 
         var line2 = MainPlot.Plot.Add.ScatterLine(xs, lower);
@@ -483,7 +474,6 @@ public partial class MainWindow : Window
 
     private void DrawDonchian(List<Bar> bars, int period)
     {
-        // Canal de Donchian (High Max / Low Min) pour la stratégie Breakout
         double[] highLine = new double[bars.Count];
         double[] lowLine = new double[bars.Count];
         double[] xs = new double[bars.Count];
@@ -497,10 +487,9 @@ public partial class MainWindow : Window
             }
             else
             {
-                // On regarde les N dernières bougies (excluant l'actuelle pour ne pas repeindre)
                 double max = double.MinValue;
                 double min = double.MaxValue;
-                for (int j = 1; j <= period; j++) // Décalage de 1 pour simuler la décision de breakout
+                for (int j = 1; j <= period; j++)
                 {
                     if (bars[i - j].High > max) max = bars[i - j].High;
                     if (bars[i - j].Low < min) min = bars[i - j].Low;
@@ -511,10 +500,10 @@ public partial class MainWindow : Window
         }
 
         var l1 = MainPlot.Plot.Add.ScatterLine(xs, highLine);
-        l1.Color = Color.FromHex("#66BB6A"); // Vert clair
+        l1.Color = Color.FromHex("#66BB6A"); 
 
         var l2 = MainPlot.Plot.Add.ScatterLine(xs, lowLine);
-        l2.Color = Color.FromHex("#EF5350"); // Rouge clair
+        l2.Color = Color.FromHex("#EF5350");
     }
 
     private void SetupEquityChartStyle()
@@ -543,7 +532,6 @@ public partial class MainWindow : Window
     {
         EquityPlot.Plot.Clear();
 
-        // 1. Filtrage et Tri des données
         var data = result.EquityCurve
                          .Where(p => p.Time.Year > 2000 && p.Value > 0)
                          .OrderBy(p => p.Time)
@@ -780,5 +768,9 @@ public partial class MainWindow : Window
             TxtOHLC.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 166, 154));
         else
             TxtOHLC.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 83, 80));
+    }
+
+    private void CbxIndicators_DropDownClosed(object sender, System.EventArgs e)
+    {
     }
 }

@@ -26,11 +26,13 @@ namespace TradeSoft.UI.ViewModels
 
         public ObservableCollection<TimeframeOption> AvailableTimeframes { get; } = new()
             {
-                new() { Label = "M5",  Value = TimeSpan.FromMinutes(5) },
-                new() { Label = "M15",  Value = TimeSpan.FromMinutes(15) },
+                new() { Label = "m5",  Value = TimeSpan.FromMinutes(5) },
+                new() { Label = "m15",  Value = TimeSpan.FromMinutes(15) },
                 new() { Label = "H1",  Value = TimeSpan.FromHours(1) },
                 new() { Label = "H4",  Value = TimeSpan.FromHours(4) },
-                new() { Label = "D1",  Value = TimeSpan.FromDays(1) }
+                new() { Label = "D1",  Value = TimeSpan.FromDays(1) },
+                new() { Label = "W1",  Value = TimeSpan.FromDays(7) },
+                new() { Label = "M1",  Value = TimeSpan.FromDays(30) }
             };
 
         private TimeSpan _selectedTimeframe = TimeSpan.FromMinutes(15);
@@ -75,6 +77,29 @@ namespace TradeSoft.UI.ViewModels
             set { _selectedStrategyName = value; OnPropertyChanged(); GenerateParameters(); }
         }
 
+        public ObservableCollection<LogEntryDisplay> Logs { get; } = new();
+
+        public void LoadLogs(List<LogEntryDTO> sourceLogs)
+        {
+            Logs.Clear();
+            foreach (var log in sourceLogs.OrderByDescending(l => l.Time))
+            {
+                string color = "#B0B3B8";
+                if (log.Type.Contains("EXECUTION")) color = "#00E676"; 
+                if (log.Type.Contains("REJET")) color = "#FF1744";     
+                if (log.Type.Contains("BUY")) color = "#2962FF";       
+                if (log.Type.Contains("SELL")) color = "#FF9100";      
+
+                Logs.Add(new LogEntryDisplay
+                {
+                    Time = log.Time.ToString("dd/MM HH:mm"),
+                    Type = log.Type,
+                    Message = log.Message,
+                    Color = color
+                });
+            }
+        }
+
         public class TimeframeOption
         {
             public string Label { get; set; } = string.Empty;
@@ -99,7 +124,7 @@ namespace TradeSoft.UI.ViewModels
                 }
             }
 
-            public Action? OnSelectionChanged; // Callback vers le ViewModel
+            public Action? OnSelectionChanged; 
             public event PropertyChangedEventHandler? PropertyChanged;
         }
         public ObservableCollection<StrategyParameterViewModel> Parameters { get; } = new();
@@ -206,7 +231,7 @@ namespace TradeSoft.UI.ViewModels
                 MinRiskRewardRatio = MinRiskReward,
 
                 MinLotSize = 1.0,
-                LotSize = 100000.0,
+                LotSize = 1.0,
                 TickSize = 0.01
             };
             foreach (var p in Parameters) config.StrategyParameters[p.Name] = p.Value;
@@ -234,6 +259,14 @@ namespace TradeSoft.UI.ViewModels
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    public class LogEntryDisplay
+    {
+        public string? Time { get; set; }
+        public string? Type { get; set; }
+        public string? Message { get; set; }
+        public string? Color { get; set; }
     }
 
     public class StrategyParameterViewModel : INotifyPropertyChanged

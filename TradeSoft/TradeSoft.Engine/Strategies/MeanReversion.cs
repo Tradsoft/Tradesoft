@@ -23,7 +23,7 @@ namespace TradeSoft.Engine.Strategies
         {
             _period = period;
             _k = k;
-            _lot = lot * 100000;
+            _lot = lot;
         }
 
         protected override void OnProcess(TickContext context)

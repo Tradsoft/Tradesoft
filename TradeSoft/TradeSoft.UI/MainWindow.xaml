@@ -186,130 +186,148 @@
 
             <Border Grid.Row="0" BorderBrush="#2B2B2B" BorderThickness="0,0,0,1" Padding="15,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-
                     <ComboBox ItemsSource="{Binding AvailableTimeframes}" 
-              DisplayMemberPath="Label"
-              SelectedValuePath="Value"
-              SelectedValue="{Binding SelectedTimeframe}"
-              Width="70" Height="28" Margin="0,0,10,0"/>
+                              DisplayMemberPath="Label"
+                              SelectedValuePath="Value"
+                              SelectedValue="{Binding SelectedTimeframe}"
+                              Width="70" Height="28" Margin="0,0,10,0"/>
 
                     <Grid VerticalAlignment="Center">
-                        <ComboBox ItemsSource="{Binding AvailableIndicators}" 
-              Width="160" Height="30" 
-              VerticalContentAlignment="Center"
-              Background="White">
+                        <ComboBox x:Name="CbxIndicators"
+                                  ItemsSource="{Binding AvailableIndicators}" 
+                                  Width="160" Height="30" 
+                                  VerticalContentAlignment="Center"
+                                  Background="White"
+                                  DropDownClosed="CbxIndicators_DropDownClosed">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <CheckBox Content="{Binding Name}" 
-                          IsChecked="{Binding IsSelected}" 
-                          Foreground="Black"
-                          FontSize="12"
-                          VerticalAlignment="Center"
-                          Margin="2"/>
+                                              IsChecked="{Binding IsSelected}" 
+                                              Foreground="Black"
+                                              FontSize="12"
+                                              VerticalAlignment="Center"
+                                              Margin="2"/>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <TextBlock Text="📈 Indicators " 
-               VerticalAlignment="Center" 
-               HorizontalAlignment="Left" 
-               Margin="12,0,0,0" 
-               Foreground="#333333"
-               FontWeight="SemiBold"
-               IsHitTestVisible="False"/>
+                        <TextBlock Text="📈 Indicateurs ▾" 
+                                   VerticalAlignment="Center" 
+                                   HorizontalAlignment="Left" 
+                                   Margin="12,0,0,0" 
+                                   Foreground="#333333"
+                                   FontWeight="SemiBold"
+                                   IsHitTestVisible="False"/>
                     </Grid>
                 </StackPanel>
             </Border>
 
             <Grid Grid.Row="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="280"/>
-                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="280"/>
+                </Grid.ColumnDefinitions>
 
-                <Grid Grid.Row="0">
-                    <scott:WpfPlot x:Name="MainPlot"/>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,5,0,0" IsHitTestVisible="False">
-                        <TextBlock x:Name="TxtOHLC" Text="" Foreground="#D1D4DC" FontSize="12" FontFamily="Consolas"/>
-                    </StackPanel>
-                </Grid>
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="250"/>
+                    </Grid.RowDefinitions>
 
-                <Grid Grid.Row="1">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="220"/>
-                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Row="0">
+                        <scott:WpfPlot x:Name="MainPlot"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,5,0,0" IsHitTestVisible="False">
+                            <TextBlock x:Name="TxtOHLC" Text="" Foreground="#D1D4DC" FontSize="12" FontFamily="Consolas"/>
+                        </StackPanel>
+                    </Grid>
 
-                    <Border Grid.Column="0" BorderBrush="#E1E1E1" BorderThickness="0,1,1,0">
+                    <Border Grid.Row="1" BorderBrush="#E1E1E1" BorderThickness="0,1,1,0">
                         <Grid Background="White">
                             <scott:WpfPlot x:Name="EquityPlot"/>
-
-                            <TextBlock Text="Equity Curve" 
-                   Foreground="#333333" 
-                   FontSize="13" 
-                   FontWeight="Bold" 
-                   FontFamily="Segoe UI"
-                   HorizontalAlignment="Left" 
-                   VerticalAlignment="Top" 
-                   Margin="50,-4,0,0" 
-                   IsHitTestVisible="False"/>
-
-                            <StackPanel x:Name="EquityInfoPanel" 
-                    Orientation="Horizontal" 
-                    HorizontalAlignment="Right" 
-                    VerticalAlignment="Top" 
-                    Margin="0,-1,15,0" 
-                    IsHitTestVisible="False">
-                                <TextBlock x:Name="TxtCrosshairInfo" 
-                       Text="" 
-                       FontSize="13" 
-                       FontWeight="SemiBold" 
-                       FontFamily="Consolas"/>
+                            <TextBlock Text="Equity Curve" Foreground="#333333" FontSize="13" FontWeight="Bold" Margin="50,5,0,0" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                            <StackPanel x:Name="EquityInfoPanel" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,15,0" IsHitTestVisible="False">
+                                <TextBlock x:Name="TxtCrosshairInfo" Text="" FontSize="13" FontWeight="SemiBold" FontFamily="Consolas"/>
                             </StackPanel>
                         </Grid>
                     </Border>
-
-                    <Border Grid.Column="1" Background="#1E222D" BorderBrush="#2B2B2B" BorderThickness="0,1,0,0" Padding="15">
-                        <StackPanel>
-                            <TextBlock Text="STATISTIQUES" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="0,0,0,15"/>
-
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Initial Cash" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValInitialCash" Text="-" Style="{StaticResource StatValueStyle}"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Final Equity" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValFinalEquity" Text="-" Style="{StaticResource StatValueStyle}"/>
-                            </Grid>
-                            <Separator Background="#2B2B2B" Margin="0,5,0,10"/>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Net Profit" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValNetProfit" Text="-" Style="{StaticResource StatValueStyle}"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Return %" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValReturn" Text="-" Style="{StaticResource StatValueStyle}"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Max Drawdown" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValMaxDD" Text="-" Style="{StaticResource StatValueStyle}" Foreground="#FF1744"/>
-                            </Grid>
-                            <Separator Background="#2B2B2B" Margin="0,5,0,10"/>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Total Trades" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValTotalTrades" Text="-" Style="{StaticResource StatValueStyle}"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Win Rate" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValWinRate" Text="-" Style="{StaticResource StatValueStyle}"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="Profit Factor" Style="{StaticResource StatLabelStyle}"/>
-                                <TextBlock x:Name="ValProfitFactor" Text="-" Style="{StaticResource StatValueStyle}"/>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
                 </Grid>
+
+                <Border Grid.Column="1" Background="#1E222D" BorderBrush="#2B2B2B" BorderThickness="1,0,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="40"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="JOURNAL D'ACTIVITÉ" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="15,0" VerticalAlignment="Center"/>
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="10,0">
+                                <ItemsControl ItemsSource="{Binding Logs}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#2B2B2B" BorderThickness="0,0,0,1" Padding="5,8">
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="{Binding Time}" Foreground="#555555" FontSize="10" FontFamily="Consolas" Margin="0,0,8,0"/>
+                                                        <TextBlock Text="{Binding Type}" Foreground="{Binding Color}" FontSize="10" FontWeight="Bold"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Message}" Foreground="#D1D4DC" FontSize="11" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <Border Grid.Row="1" BorderBrush="#2B2B2B" BorderThickness="0,1,0,0" Padding="15" Background="#1E222D">
+                            <StackPanel>
+                                <TextBlock Text="RÉSULTATS" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="0,0,0,15"/>
+
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Initial Cash" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValInitialCash" Text="-" Style="{StaticResource StatValueStyle}"/>
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Final Equity" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValFinalEquity" Text="-" Style="{StaticResource StatValueStyle}"/>
+                                </Grid>
+                                <Separator Background="#2B2B2B" Margin="0,5"/>
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Net Profit" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValNetProfit" Text="-" Style="{StaticResource StatValueStyle}"/>
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Return %" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValReturn" Text="-" Style="{StaticResource StatValueStyle}"/>
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Max Drawdown" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValMaxDD" Text="-" Style="{StaticResource StatValueStyle}" Foreground="#FF1744"/>
+                                </Grid>
+                                <Separator Background="#2B2B2B" Margin="0,5"/>
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Total Trades" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValTotalTrades" Text="-" Style="{StaticResource StatValueStyle}"/>
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Win Rate" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValWinRate" Text="-" Style="{StaticResource StatValueStyle}"/>
+                                </Grid>
+                                <Grid Margin="0,2">
+                                    <TextBlock Text="Profit Factor" Style="{StaticResource StatLabelStyle}"/>
+                                    <TextBlock x:Name="ValProfitFactor" Text="-" Style="{StaticResource StatValueStyle}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
     </Grid>

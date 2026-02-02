@@ -23,7 +23,7 @@ namespace TradeSoft.Core.DTO
         public double TickSize { get; set; } = 0.01;
 
         public double MinLotSize { get; set; } = 1.0;
-        public double LotSize { get; set; } = 100000.0;
+        public double LotSize { get; set; } = 1.0;
 
         public double MaxRiskPerTradePercent { get; set; } = 1.0;
         public double MaxDrawdownPercent { get; set; } = 10.0;
@@ -47,8 +47,20 @@ namespace TradeSoft.Core.DTO
         public List<TradeResultItem> Trades { get; set; } = new();
         public List<EquityPoint> EquityCurve { get; set; } = new();
         public List<Bar> Bars { get; set; } = new();
+        public List<LogEntryDTO> Logs { get; set; } = new();
     }
 
+    public class LogEntryDTO
+    {
+        public DateTime Time { get; set; }
+        public string Type { get; set; } // "INTENTION", "EXECUTION", "REJET"
+        public string Message { get; set; }
+
+        public LogEntryDTO(DateTime time, string type, string message)
+        {
+            Time = time; Type = type; Message = message;
+        }
+    }
     public class TradeResultItem
     {
         public long Id { get; set; }
