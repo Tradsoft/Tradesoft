@@ -20,7 +20,6 @@ using Bar = TradeSoft.Core.Domain.Bar;
 
 namespace TradeSoft.UI.Services
 {
-    // 1. Collecteur pour le Graphique
     public class BarCollector : Handler
     {
         public List<Bar> Bars { get; } = new List<Bar>();
@@ -33,8 +32,17 @@ namespace TradeSoft.UI.Services
             }
         }
     }
-
-    // 2. Logger d'Intentions (AVANT le RiskManager)
+    public class TradeCollector : Handler
+    {
+        public List<Trade> AllTrades { get; } = new List<Trade>();
+        protected override void OnProcess(TickContext context)
+        {
+            if (context.Trades.Count > 0)
+            {
+                AllTrades.AddRange(context.Trades);
+            }
+        }
+    }
     public class OrderLogger : Handler
     {
         protected override void OnProcess(TickContext context)
@@ -46,14 +54,12 @@ namespace TradeSoft.UI.Services
                 {
                     string side = order.Side.ToString().ToUpper();
                     string type = order.Type.ToString().ToUpper();
-                    // On logue l'intention brute
-                    System.Diagnostics.Debug.WriteLine($"📋 [INTENTION] {time:dd/MM HH:mm} | {side} {type} | Qty: {order.Quantity} | Prix: {order.Price}");
+                    System.Diagnostics.Debug.WriteLine($"📋 [INTENTION] {time:dd/MM HH:mm} | {side} {type} | Qty: {order.Quantity}");
                 }
             }
         }
     }
 
-    // 3. Logger d'Exécutions (APRÈS le Broker)
     public class ConsoleTradeLogger : Handler
     {
         protected override void OnProcess(TickContext context)
@@ -62,13 +68,12 @@ namespace TradeSoft.UI.Services
             {
                 string action = trade.Side.ToString().ToUpper();
                 DateTime tradeTime = new DateTime(trade.Timestamp);
-                // On logue le trade confirmé
-                System.Diagnostics.Debug.WriteLine($"⚡ [EXECUTION] {tradeTime:dd/MM HH:mm} | {action} | Prix: {trade.Price:F5} | Qty: {trade.Quantity}");
+
+                string log = $"⚡ [EXECUTION] {tradeTime:dd/MM HH:mm} | {action} | Prix: {trade.Price:F5} | Qty: {trade.Quantity}";
+                System.Diagnostics.Debug.WriteLine(log);
             }
         }
     }
-
-    // 4. Service Principal
     public class BacktestService
     {
         public async Task<List<Bar>> GetHistoricalBarsAsync(BacktestConfig config)
@@ -111,49 +116,41 @@ namespace TradeSoft.UI.Services
                 var provider = new MultiFileTickProvider(dataPath, logger);
                 var aggregator = new BarAggregator(config.Timeframe);
 
-                // --- Création des composants ---
                 var barCollector = new BarCollector();
-                var orderLogger = new OrderLogger();        // Logger d'intentions
-                var tradeLogger = new ConsoleTradeLogger(); // Logger d'exécutions
+                var tradeCollector = new TradeCollector();
+                var orderLogger = new OrderLogger();
+                var tradeLogger = new ConsoleTradeLogger();
 
                 var portfolioManager = new PortfolioManager(config.InitialCash);
                 var broker = new SimulatedBroker(config);
                 var riskManager = new RiskManager(config, portfolioManager);
                 Handler strategy = CreateStrategy(config.Strategy, config.StrategyParameters);
 
-                // --- PIPELINE ORDONNÉ (CRUCIAL) ---
-
-                // 1. Data -> Barres
                 aggregator.SetNext(barCollector);
-
-                // 2. Barres -> Stratégie (Génère des NewOrders)
                 barCollector.SetNext(strategy);
-
-                // 3. Stratégie -> Logger (On voit ce que la stratégie veut faire)
                 strategy.SetNext(orderLogger);
+                orderLogger.SetNext(riskManager); 
+                riskManager.SetNext(broker); 
+                broker.SetNext(tradeCollector); 
+                tradeCollector.SetNext(tradeLogger); 
+                tradeLogger.SetNext(portfolioManager); 
 
-                // 4. Logger -> RiskManager (Filtre les ordres dangereux)
-                orderLogger.SetNext(riskManager);
-
-                // 5. RiskManager -> Broker (Exécute les ordres validés)
-                riskManager.SetNext(broker);
-
-                // 6. Broker -> TradeLogger (Affiche les trades réalisés)
-                broker.SetNext(tradeLogger);
-
-                // 7. TradeLogger -> Portfolio (Met à jour le compte)
-                tradeLogger.SetNext(portfolioManager);
-
-                // --- Exécution ---
                 System.Diagnostics.Debug.WriteLine("=== DÉBUT DU BACKTEST ===");
-
                 var runner = new TradeSoft.Engine.BacktestRunner(provider, aggregator, runnerLogger);
                 runner.Run(config.Symbol, config.StartDate, config.EndDate, null, token);
-
                 System.Diagnostics.Debug.WriteLine("=== FIN DU BACKTEST ===");
 
                 var result = StatisticsCalculator.Calculate(portfolioManager.CurrentPortfolio, portfolioManager.EquityCurve);
+
                 result.Bars = barCollector.Bars;
+                result.Trades = tradeCollector.AllTrades.Select(t => new TradeResultItem
+                {
+                    Time = new DateTime(t.Timestamp),
+                    Side = t.Side.ToString(),
+                    Price = t.Price,
+                    Quantity = t.Quantity,
+                    PnL = 0
+                }).ToList();
 
                 if (result.EquityCurve.Count == 0) result.FinalEquity = config.InitialCash;
 
@@ -168,28 +165,10 @@ namespace TradeSoft.UI.Services
 
             return type switch
             {
-                StrategyType.RSI => new RSI(
-                    period: GetI("Period", 14),
-                    oversold: GetD("Oversold", 30),
-                    overbought: GetD("Overbought", 70),
-                    lot: GetD("Lot", 1.0),
-                    slPips: GetD("SL Pips", 50),
-                    tpPips: GetD("TP Pips", 100)),
-
-                StrategyType.MAC => new MovingAverageCrossover(
-                    shortPeriod: GetI("Short Period", 20),
-                    longPeriod: GetI("Long Period", 50),
-                    lot: GetD("Lot", 1.0)),
-
-                StrategyType.MeanReversion => new MeanReversion(
-                    period: GetI("Period", 20),
-                    k: GetD("K", 2.0),
-                    lot: GetD("Lot", 1.0)),
-
-                StrategyType.Breakout => new BreakoutSupportResistance(
-                    lookback: GetI("Lookback", 20),
-                    lot: GetD("Lot", 1.0)),
-
+                StrategyType.RSI => new RSI(GetI("Period", 14), GetD("Oversold", 30), GetD("Overbought", 70), GetD("Lot", 1.0), GetD("SL Pips", 50), GetD("TP Pips", 100), GetD("Tick Size", 0.01)),
+                StrategyType.MAC => new MovingAverageCrossover(GetI("Short Period", 20), GetI("Long Period", 50), GetD("Lot", 1.0)),
+                StrategyType.MeanReversion => new MeanReversion(GetI("Period", 20), GetD("K", 2.0), GetD("Lot", 1.0)),
+                StrategyType.Breakout => new BreakoutSupportResistance(GetI("Lookback", 20), GetD("Lot", 1.0)),
                 _ => new StrategyRouter()
             };
         }
@@ -199,6 +178,7 @@ namespace TradeSoft.UI.Services
             string[] paths = new[] {
                 @"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
                 @"C:\Users\louis\source\repos\Tradesoft\Data\EURUSD",
+                @"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\EURUSD",
                 Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD"))
             };
             return paths.FirstOrDefault(Directory.Exists);

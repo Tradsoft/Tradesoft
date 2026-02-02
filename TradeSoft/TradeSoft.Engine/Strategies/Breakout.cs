@@ -13,10 +13,12 @@ namespace TradeSoft.Engine.Strategies
         private readonly Queue<double> _window = new();
         private double _positionLots = 0.0;
 
+        private const double SafetyStopLossPercent = 0.02;
+
         public BreakoutSupportResistance(int lookback = 20, double lot = 1.0)
         {
             _lookback = lookback;
-            _lot = lot;
+            _lot = lot * 100000;
         }
 
         protected override void OnProcess(TickContext context)
@@ -57,22 +59,32 @@ namespace TradeSoft.Engine.Strategies
         private void SendToTarget(TickContext context, double targetLots, double price, string label, double s, double r, long ts)
         {
             double delta = targetLots - _positionLots;
-            if (Math.Abs(delta) < 1e-12) return;
+
+            if (Math.Abs(delta) < 1.0) return;
 
             Side side = delta > 0 ? Side.Buy : Side.Sell;
+            double qty = Math.Abs(delta);
+
+            double slPrice;
+            if (side == Side.Buy)
+                slPrice = Math.Max(s, price * (1.0 - SafetyStopLossPercent));
+            else
+                slPrice = Math.Min(r, price * (1.0 + SafetyStopLossPercent));
+
             context.NewOrders.Add(new Order
             {
                 Id = DateTime.UtcNow.Ticks,
                 Timestamp = ts,
                 Symbol = "EURUSD",
                 Side = side,
-                Quantity = Math.Abs(delta),
+                Quantity = qty,
                 Type = OrderType.Market,
-                Price = price
+                Price = price,
+                StopLoss = slPrice
             });
 
             _positionLots = targetLots;
-            Console.WriteLine($"[Breakout] {label} | P={price:F5} Range=[{s:F5}, {r:F5}] | {new DateTime(ts):HH:mm}");
+            Console.WriteLine($"[Breakout] {label} | P={price:F2} | SL={slPrice:F2} | Range=[{s:F2}-{r:F2}]");
         }
     }
 }

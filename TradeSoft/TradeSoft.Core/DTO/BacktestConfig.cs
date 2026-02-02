@@ -20,9 +20,9 @@ namespace TradeSoft.Core.DTO
         public double CommissionPerLot { get; set; } = 2.5;
         public CommissionType CommissionType { get; set; } = CommissionType.Fixed;
         public double SlippagePips { get; set; } = 0.0;
-        public double TickSize { get; set; } = 0.0001;
+        public double TickSize { get; set; } = 0.01;
 
-        public double MinLotSize { get; set; } = 100.0;
+        public double MinLotSize { get; set; } = 1.0;
         public double LotSize { get; set; } = 100000.0;
 
         public double MaxRiskPerTradePercent { get; set; } = 1.0;

@@ -17,11 +17,13 @@ namespace TradeSoft.Engine.Strategies
         private double _sumSq;
         private double _positionLots = 0.0;
 
+        private const double SafetyStopLossPercent = 0.02;
+
         public MeanReversion(int period = 20, double k = 2.0, double lot = 1.0)
         {
             _period = period;
             _k = k;
-            _lot = lot;
+            _lot = lot * 100000;
         }
 
         protected override void OnProcess(TickContext context)
@@ -62,25 +64,35 @@ namespace TradeSoft.Engine.Strategies
             }
         }
 
-        private void SendToTarget(TickContext context, double targetLots, double price, string label, double mean, double upper, double lower, long ts)
+        private void SendToTarget(TickContext context, double targetUnits, double price, string label, double mean, double upper, double lower, long ts)
         {
-            double delta = targetLots - _positionLots;
-            if (Math.Abs(delta) < 1e-12) return;
+            double delta = targetUnits - _positionLots;
+
+            if (Math.Abs(delta) < 1.0) return;
 
             Side side = delta > 0 ? Side.Buy : Side.Sell;
+            double qty = Math.Abs(delta);
+
+            double slPrice;
+            if (side == Side.Buy)
+                slPrice = price * (1.0 - SafetyStopLossPercent); 
+            else
+                slPrice = price * (1.0 + SafetyStopLossPercent); 
+
             context.NewOrders.Add(new Order
             {
                 Id = DateTime.UtcNow.Ticks,
                 Timestamp = ts,
                 Symbol = "EURUSD",
                 Side = side,
-                Quantity = Math.Abs(delta),
+                Quantity = qty,
                 Type = OrderType.Market,
-                Price = price
+                Price = price,
+                StopLoss = slPrice 
             });
 
-            _positionLots = targetLots;
-            Console.WriteLine($"[MeanRev] {label} | P={price:F5} Bands=[{lower:F5}, {upper:F5}] | {new DateTime(ts):HH:mm}");
+            _positionLots = targetUnits;
+            Console.WriteLine($"[MeanRev] {label} | P={price:F2} | SL={slPrice:F2} | Bands=[{lower:F2}, {upper:F2}]");
         }
     }
 }
