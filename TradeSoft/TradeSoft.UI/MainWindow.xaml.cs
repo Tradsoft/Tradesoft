@@ -36,6 +36,15 @@ public partial class MainWindow : Window
         SetupChartStyle();
         SetupEquityChartStyle();
         SetupCrosshair();
+
+        _viewModel.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.AvailableIndicators))
+            {
+                if (_currentBars != null)
+                    Dispatcher.Invoke(() => UpdateMainChart(_currentBars));
+            }
+        };
     }
 
     private void OnMarketDataLoaded(object? sender, List<Bar> bars)
@@ -163,20 +172,24 @@ public partial class MainWindow : Window
         ValProfitFactor.Text = "-";
     }
 
+    // Modifiez la méthode existante UpdateMainChart
     private void UpdateMainChart(List<Bar> bars)
     {
         _currentBars = bars;
         MainPlot.Plot.Clear();
 
+        // 1. Dessin des Bougies (Code existant)
         var oldLimits = MainPlot.Plot.Axes.GetLimits();
         var candles = bars.Select((b, i) => new OHLC(b.Open, b.High, b.Low, b.Close, DateTime.FromOADate(i), TimeSpan.FromDays(1))).ToList();
-
         var series = MainPlot.Plot.Add.Candlestick(candles);
         series.RisingColor = Color.FromHex("#2962FF");
         series.FallingColor = Color.FromHex("#F23645");
 
-        DateTime[] dates = bars.Select(b => b.Timestamp).ToArray();
+        // 2. NOUVEAU : Dessin des Indicateurs
+        DrawIndicators(bars);
 
+        // 3. Configuration Axes (Code existant)
+        DateTime[] dates = bars.Select(b => b.Timestamp).ToArray();
         MainPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
         {
             LabelFormatter = (value) => {
@@ -188,6 +201,320 @@ public partial class MainWindow : Window
 
         if (_viewModel.ShouldResetZoom) MainPlot.Plot.Axes.AutoScale();
         else MainPlot.Plot.Axes.SetLimits(oldLimits);
+
+        MainPlot.Refresh();
+    }
+
+    // --- NOUVELLES MÉTHODES DE DESSIN ---
+
+    private void DrawIndicators(List<Bar> bars)
+    {
+        foreach (var ind in _viewModel.AvailableIndicators.Where(i => i.IsSelected))
+        {
+            switch (ind.Type)
+            {
+                case "SMA": DrawSMA(bars, ind.Period); break;
+                case "EMA": DrawEMA(bars, ind.Period); break; // Nouveau
+                case "Bands": DrawBollinger(bars, ind.Period, 2.0); break;
+                case "Breakout": DrawDonchian(bars, ind.Period); break;
+                case "RSI_Color": DrawRSIHighlights(bars, ind.Period); break; // Nouveau
+                case "PSAR": DrawParabolicSAR(bars); break; // Nouveau
+            }
+        }
+    }
+
+    private void DrawEMA(List<Bar> bars, int period)
+    {
+        double[] ema = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+        double k = 2.0 / (period + 1);
+
+        // Initialisation avec SMA pour le premier point
+        double sum = 0;
+        for (int i = 0; i < period && i < bars.Count; i++) sum += bars[i].Close;
+        double prevEma = sum / Math.Min(period, bars.Count);
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            if (i < period)
+            {
+                ema[i] = double.NaN;
+            }
+            else
+            {
+                ema[i] = (bars[i].Close - prevEma) * k + prevEma;
+                prevEma = ema[i];
+            }
+        }
+
+        var line = MainPlot.Plot.Add.ScatterLine(xs, ema);
+        line.Color = Color.FromHex("#FF9800"); // Orange
+        line.LineWidth = 2;
+    }
+
+    private void DrawSMA(List<Bar> bars, int period)
+    {
+        double[] sma = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i; // Index simple pour s'aligner avec les bougies
+            if (i < period - 1)
+            {
+                sma[i] = double.NaN; // Pas assez de données
+            }
+            else
+            {
+                // Calcul moyenne simple
+                double sum = 0;
+                for (int j = 0; j < period; j++) sum += bars[i - j].Close;
+                sma[i] = sum / period;
+            }
+        }
+
+        // Dessin ScottPlot
+        var line = MainPlot.Plot.Add.ScatterLine(xs, sma);
+        line.Color = period > 30 ? Color.FromHex("#FFA726") : Color.FromHex("#29B6F6"); // Orange pour long terme, Bleu ciel pour court terme
+        line.LineWidth = 2;
+    }
+
+    private void DrawRSIHighlights(List<Bar> bars, int period)
+    {
+        if (bars.Count < period) return;
+
+        // Calcul rapide du RSI
+        double[] rsi = CalculateRSI(bars, period);
+
+        var overboughtX = new List<double>();
+        var overboughtY = new List<double>();
+        var oversoldX = new List<double>();
+        var oversoldY = new List<double>();
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            if (rsi[i] >= 70) // Surachat
+            {
+                overboughtX.Add(i);
+                overboughtY.Add(bars[i].High * 1.0005); // Juste au-dessus de la mèche
+            }
+            else if (rsi[i] <= 30) // Survente
+            {
+                oversoldX.Add(i);
+                oversoldY.Add(bars[i].Low * 0.9995); // Juste en-dessous de la mèche
+            }
+        }
+
+        // Marqueur Rouge au-dessus (Vente potentielle)
+        if (overboughtX.Count > 0)
+        {
+            var sc = MainPlot.Plot.Add.Scatter(overboughtX.ToArray(), overboughtY.ToArray());
+            sc.MarkerStyle.Shape = MarkerShape.FilledCircle;
+            sc.MarkerStyle.Size = 5;
+            sc.Color = Color.FromHex("#FF1744"); // Rouge
+            sc.LineWidth = 0;
+        }
+
+        // Marqueur Vert en-dessous (Achat potentiel)
+        if (oversoldX.Count > 0)
+        {
+            var sc = MainPlot.Plot.Add.Scatter(oversoldX.ToArray(), oversoldY.ToArray());
+            sc.MarkerStyle.Shape = MarkerShape.FilledCircle;
+            sc.MarkerStyle.Size = 5;
+            sc.Color = Color.FromHex("#00E676"); // Vert
+            sc.LineWidth = 0;
+        }
+    }
+
+    // Helper pour calculer le RSI
+    private double[] CalculateRSI(List<Bar> bars, int period)
+    {
+        double[] rsi = new double[bars.Count];
+        double avgGain = 0;
+        double avgLoss = 0;
+
+        for (int i = 1; i < bars.Count; i++)
+        {
+            double change = bars[i].Close - bars[i - 1].Close;
+            double gain = change > 0 ? change : 0;
+            double loss = change < 0 ? -change : 0;
+
+            if (i <= period)
+            {
+                avgGain += gain;
+                avgLoss += loss;
+                if (i == period)
+                {
+                    avgGain /= period;
+                    avgLoss /= period;
+                }
+            }
+            else
+            {
+                avgGain = (avgGain * (period - 1) + gain) / period;
+                avgLoss = (avgLoss * (period - 1) + loss) / period;
+            }
+
+            if (i >= period)
+            {
+                double rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
+                rsi[i] = 100 - (100 / (1 + rs));
+            }
+        }
+        return rsi;
+    }
+
+    private void DrawParabolicSAR(List<Bar> bars)
+    {
+        if (bars.Count < 2) return;
+
+        double af = 0.02; // Step
+        double maxAf = 0.2;
+        double[] sar = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        // Initialisation basique
+        bool isBullish = true;
+        sar[0] = bars[0].Low;
+        double ep = bars[0].High; // Extreme Point
+        double currentAf = af;
+
+        for (int i = 1; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            double prevSar = sar[i - 1];
+
+            // Calcul SAR
+            sar[i] = prevSar + currentAf * (ep - prevSar);
+
+            // Règles de renversement
+            if (isBullish)
+            {
+                if (bars[i].Low < sar[i]) // Renversement vers la baisse
+                {
+                    isBullish = false;
+                    sar[i] = ep;
+                    ep = bars[i].Low;
+                    currentAf = af;
+                }
+                else
+                {
+                    if (bars[i].High > ep)
+                    {
+                        ep = bars[i].High;
+                        currentAf = Math.Min(currentAf + af, maxAf);
+                    }
+                    // Le SAR ne doit pas dépasser le Low des 2 bougies précédentes
+                    sar[i] = Math.Min(sar[i], Math.Min(bars[i - 1].Low, bars[Math.Max(0, i - 2)].Low));
+                }
+            }
+            else
+            {
+                if (bars[i].High > sar[i]) // Renversement vers la hausse
+                {
+                    isBullish = true;
+                    sar[i] = ep;
+                    ep = bars[i].High;
+                    currentAf = af;
+                }
+                else
+                {
+                    if (bars[i].Low < ep)
+                    {
+                        ep = bars[i].Low;
+                        currentAf = Math.Min(currentAf + af, maxAf);
+                    }
+                    // Le SAR ne doit pas descendre sous le High des 2 bougies précédentes
+                    sar[i] = Math.Max(sar[i], Math.Max(bars[i - 1].High, bars[Math.Max(0, i - 2)].High));
+                }
+            }
+        }
+
+        var scatter = MainPlot.Plot.Add.Scatter(xs, sar);
+        scatter.MarkerStyle.Shape = MarkerShape.FilledCircle;
+        scatter.MarkerStyle.Size = 2; // Petits points discrets
+        scatter.Color = Color.FromHex("#787B86"); // Gris pro
+        scatter.LineWidth = 0;
+    }
+
+    private void DrawBollinger(List<Bar> bars, int period, double k)
+    {
+        double[] upper = new double[bars.Count];
+        double[] lower = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            if (i < period - 1)
+            {
+                upper[i] = double.NaN; lower[i] = double.NaN;
+            }
+            else
+            {
+                // 1. Moyenne
+                double sum = 0;
+                for (int j = 0; j < period; j++) sum += bars[i - j].Close;
+                double mean = sum / period;
+
+                // 2. Écart Type
+                double sumSq = 0;
+                for (int j = 0; j < period; j++)
+                {
+                    double val = bars[i - j].Close;
+                    sumSq += (val - mean) * (val - mean);
+                }
+                double stdDev = Math.Sqrt(sumSq / period);
+
+                upper[i] = mean + k * stdDev;
+                lower[i] = mean - k * stdDev;
+            }
+        }
+
+        var line1 = MainPlot.Plot.Add.ScatterLine(xs, upper);
+        line1.Color = Color.FromHex("#AB47BC"); // Violet
+        line1.LinePattern = LinePattern.Dashed;
+
+        var line2 = MainPlot.Plot.Add.ScatterLine(xs, lower);
+        line2.Color = Color.FromHex("#AB47BC");
+        line2.LinePattern = LinePattern.Dashed;
+    }
+
+    private void DrawDonchian(List<Bar> bars, int period)
+    {
+        // Canal de Donchian (High Max / Low Min) pour la stratégie Breakout
+        double[] highLine = new double[bars.Count];
+        double[] lowLine = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            if (i < period)
+            {
+                highLine[i] = double.NaN; lowLine[i] = double.NaN;
+            }
+            else
+            {
+                // On regarde les N dernières bougies (excluant l'actuelle pour ne pas repeindre)
+                double max = double.MinValue;
+                double min = double.MaxValue;
+                for (int j = 1; j <= period; j++) // Décalage de 1 pour simuler la décision de breakout
+                {
+                    if (bars[i - j].High > max) max = bars[i - j].High;
+                    if (bars[i - j].Low < min) min = bars[i - j].Low;
+                }
+                highLine[i] = max;
+                lowLine[i] = min;
+            }
+        }
+
+        var l1 = MainPlot.Plot.Add.ScatterLine(xs, highLine);
+        l1.Color = Color.FromHex("#66BB6A"); // Vert clair
+
+        var l2 = MainPlot.Plot.Add.ScatterLine(xs, lowLine);
+        l2.Color = Color.FromHex("#EF5350"); // Rouge clair
     }
 
     private void SetupEquityChartStyle()
