@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.Pipeline;
@@ -8,7 +11,7 @@ namespace TradeSoft.Engine.Strategies
     {
         private readonly int _shortPeriod;
         private readonly int _longPeriod;
-        private readonly double _lotSize; 
+        private readonly double _lotSize;
 
         private readonly Queue<double> _shortWindow = new();
         private readonly Queue<double> _longWindow = new();
@@ -19,6 +22,7 @@ namespace TradeSoft.Engine.Strategies
         private int _currentDirection = 0;
 
         private readonly double _epsilon = 0.00001;
+        private const double SafetyStopLossPercent = 0.02;
 
         public MovingAverageCrossover(int shortPeriod = 20, int longPeriod = 50, double lot = 1.0)
         {
@@ -51,7 +55,6 @@ namespace TradeSoft.Engine.Strategies
                 double currDiff = shortMA - longMA;
 
                 bool bullishCross = (prevDiff <= 0 && currDiff > _epsilon);
-
                 bool bearishCross = (prevDiff >= 0 && currDiff < -_epsilon);
 
                 if (bullishCross && _currentDirection != 1)
@@ -75,10 +78,16 @@ namespace TradeSoft.Engine.Strategies
             double currentPos = (_currentDirection == 1) ? _lotSize : (_currentDirection == -1 ? -_lotSize : 0);
             double delta = targetUnits - currentPos;
 
-            if (Math.Abs(delta) < 1) return; 
+            if (Math.Abs(delta) < 1) return;
 
             Side side = delta > 0 ? Side.Buy : Side.Sell;
-            double qty = Math.Abs(delta); 
+            double qty = Math.Abs(delta);
+
+            double slPrice;
+            if (side == Side.Buy)
+                slPrice = price * (1.0 - SafetyStopLossPercent); 
+            else
+                slPrice = price * (1.0 + SafetyStopLossPercent); 
 
             context.NewOrders.Add(new Order
             {
@@ -89,10 +98,11 @@ namespace TradeSoft.Engine.Strategies
                 Quantity = qty,
                 Type = OrderType.Market,
                 Price = price,
+                StopLoss = slPrice, 
                 Comment = $"MA_Cross_{label}"
             });
 
-            Console.WriteLine($"[MA] {label} | MA{_shortPeriod}={sMa:F5} MA{_longPeriod}={lMa:F5} | Qty={qty} | {new DateTime(ts):HH:mm}");
+            Console.WriteLine($"[MA] {label} | P={price:F2} | SL={slPrice:F2} | MA{_shortPeriod}={sMa:F2} MA{_longPeriod}={lMa:F2}");
         }
 
         private void SendOrder(TickContext context, double quantity, double price, string label, double sMa, double lMa, long ts)

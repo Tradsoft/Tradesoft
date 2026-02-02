@@ -16,14 +16,12 @@ namespace TradeSoft.UI.ViewModels
         private readonly BacktestService _backtestService;
         private CancellationTokenSource? _cts;
 
-        // --- Dates (Action : Charge uniquement les données graphiques) ---
         private DateTime _startDate = new DateTime(2015, 01, 01);
         public DateTime StartDate { get => _startDate; set { _startDate = value; OnPropertyChanged(); LoadMarketData(); } }
 
         private DateTime _endDate = new DateTime(2015, 01, 05);
         public DateTime EndDate { get => _endDate; set { _endDate = value; OnPropertyChanged(); LoadMarketData(); } }
 
-        // --- Timeframe (Action : Charge uniquement les données graphiques) ---
         public ObservableCollection<TimeSpan> AvailableTimeframes { get; } = new() {
             TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromHours(1),
             TimeSpan.FromHours(4), TimeSpan.FromDays(1)
@@ -31,19 +29,33 @@ namespace TradeSoft.UI.ViewModels
         private TimeSpan _selectedTimeframe = TimeSpan.FromMinutes(5);
         public TimeSpan SelectedTimeframe { get => _selectedTimeframe; set { _selectedTimeframe = value; OnPropertyChanged(); LoadMarketData(); } }
 
-        // --- Risk (Pas d'action auto) ---
         private double _initialCash = 10000.0;
         public double InitialCash { get => _initialCash; set { _initialCash = value; OnPropertyChanged(); } }
+
         private double _leverage = 30.0;
         public double Leverage { get => _leverage; set { _leverage = value; OnPropertyChanged(); } }
-        private double _minLotSize = 1000.0;
-        public double MinLotSize { get => _minLotSize; set { _minLotSize = value; OnPropertyChanged(); } }
+
+        private double _commission = 2.5;
+        public double Commission { get => _commission; set { _commission = value; OnPropertyChanged(); } }
+
+        private double _slippage = 0.0;
+        public double Slippage { get => _slippage; set { _slippage = value; OnPropertyChanged(); } }
+
         private double _maxRiskPerTrade = 1.0;
         public double MaxRiskPerTrade { get => _maxRiskPerTrade; set { _maxRiskPerTrade = value; OnPropertyChanged(); } }
+
         private int _maxPositions = 5;
         public int MaxPositions { get => _maxPositions; set { _maxPositions = value; OnPropertyChanged(); } }
 
-        // --- Strategy (Pas d'action auto sur le changement de nom) ---
+        private double _maxDrawdown = 10.0;
+        public double MaxDrawdown { get => _maxDrawdown; set { _maxDrawdown = value; OnPropertyChanged(); } }
+
+        private double _maxDailyLoss = 5.0;
+        public double MaxDailyLoss { get => _maxDailyLoss; set { _maxDailyLoss = value; OnPropertyChanged(); } }
+
+        private double _minRR = 1.0;
+        public double MinRiskReward { get => _minRR; set { _minRR = value; OnPropertyChanged(); } }
+
         public ObservableCollection<string> StrategyNames { get; } = new() { "RSI", "MAC", "MeanReversion", "Breakout" };
         private string _selectedStrategyName = "RSI";
         public string SelectedStrategyName
@@ -54,30 +66,24 @@ namespace TradeSoft.UI.ViewModels
 
         public ObservableCollection<StrategyParameterViewModel> Parameters { get; } = new();
 
-        // --- Status ---
         private string _statusText = "Prêt.";
         public string StatusText { get => _statusText; set { _statusText = value; OnPropertyChanged(); } }
         private bool _isBusy;
         public bool IsBusy { get => _isBusy; set { _isBusy = value; OnPropertyChanged(); } }
 
-        // Events & Commands
         public event EventHandler<BacktestResult>? BacktestCompleted;
-        public event EventHandler<List<Bar>>? MarketDataLoaded; // Nouvel event pour juste les bougies
+        public event EventHandler<List<Bar>>? MarketDataLoaded;
         public bool ShouldResetZoom { get; private set; }
         public ICommand RunBacktestCommand { get; }
 
         public MainViewModel()
         {
             _backtestService = new BacktestService();
-            // Le bouton lance le vrai calcul
             RunBacktestCommand = new RelayCommand(async () => await RunBacktestAsync());
             GenerateParameters();
-
-            // Au démarrage : on charge juste le graphique, pas de calcul
             Task.Delay(500).ContinueWith(_ => LoadMarketData());
         }
 
-        // --- Action 1 : Juste afficher les bougies (Rapide) ---
         private async void LoadMarketData()
         {
             if (IsBusy) return;
@@ -98,12 +104,11 @@ namespace TradeSoft.UI.ViewModels
             finally { IsBusy = false; }
         }
 
-        // --- Action 2 : Le vrai Backtest (Lourd) ---
         public async Task RunBacktestAsync()
         {
             if (IsBusy) return;
             IsBusy = true;
-            ShouldResetZoom = false; // On garde le zoom actuel si possible
+            ShouldResetZoom = false;
             StatusText = "Calcul stratégie...";
 
             try
@@ -135,11 +140,22 @@ namespace TradeSoft.UI.ViewModels
                 Symbol = "EURUSD",
                 Strategy = Enum.Parse<StrategyType>(_selectedStrategyName),
                 StrategyParameters = new Dictionary<string, object>(),
+
                 InitialCash = InitialCash,
                 Leverage = Leverage,
-                MinLotSize = MinLotSize,
+                CommissionPerLot = Commission,
+                CommissionType = CommissionType.Fixed,
+                SlippagePips = Slippage,
+
                 MaxRiskPerTradePercent = MaxRiskPerTrade,
-                MaxConcurrentPositions = MaxPositions
+                MaxConcurrentPositions = MaxPositions,
+                MaxDrawdownPercent = MaxDrawdown,
+                MaxDailyLossPercent = MaxDailyLoss,
+                MinRiskRewardRatio = MinRiskReward,
+
+                MinLotSize = 1.0,
+                LotSize = 100000.0,
+                TickSize = 0.01
             };
             foreach (var p in Parameters) config.StrategyParameters[p.Name] = p.Value;
             return config;
@@ -156,7 +172,7 @@ namespace TradeSoft.UI.ViewModels
         {
             return strategyName switch
             {
-                "RSI" => new() { { "Period", 14 }, { "Oversold", 30 }, { "Overbought", 70 }, { "Lot", 1.0 } },
+                "RSI" => new() { { "Period", 14 }, { "Oversold", 30 }, { "Overbought", 70 }, { "Lot", 1.0 }, { "SL Pips", 50 }, { "TP Pips", 100 }, { "Tick Size", 0.01 } },
                 "MAC" => new() { { "Short Period", 20 }, { "Long Period", 50 }, { "Lot", 1.0 } },
                 "MeanReversion" => new() { { "Period", 20 }, { "K", 2.0 }, { "Lot", 1.0 } },
                 "Breakout" => new() { { "Lookback", 20 }, { "Lot", 1.0 } },

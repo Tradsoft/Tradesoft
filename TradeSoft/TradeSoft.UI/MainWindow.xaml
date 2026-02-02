@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:scott="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
         xmlns:vm="clr-namespace:TradeSoft.UI.ViewModels"
-        Title="TradeSoft Pro" Height="768" Width="1366"
+        Title="TradeSoft Pro" Height="850" Width="1400"
         Background="#131722" Foreground="#D1D4DC"
         WindowStartupLocation="CenterScreen">
 
@@ -25,11 +25,25 @@
             <Setter Property="Background" Value="#2A2E39"/>
             <Setter Property="Padding" Value="5"/>
         </Style>
+
+        <Style x:Key="StatLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#787B86"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="StatValueStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E0E3EB"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+        </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="320"/>
+            <ColumnDefinition Width="340"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -75,13 +89,13 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <TextBlock Text="RISK MANAGEMENT" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="0,20,0,10"/>
+                        <TextBlock Text="BROKER / ACCOUNT" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="0,20,0,10"/>
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition/>
                                 <ColumnDefinition Width="100"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Initial Cash" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBlock Text="Initial Cash ($)" VerticalAlignment="Center" Foreground="#E0E3EB"/>
                             <TextBox Grid.Column="1" Text="{Binding InitialCash}"/>
                         </Grid>
                         <Grid Margin="0,0,0,12">
@@ -89,7 +103,7 @@
                                 <ColumnDefinition/>
                                 <ColumnDefinition Width="100"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Leverage" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBlock Text="Leverage (x)" VerticalAlignment="Center" Foreground="#E0E3EB"/>
                             <TextBox Grid.Column="1" Text="{Binding Leverage}"/>
                         </Grid>
                         <Grid Margin="0,0,0,12">
@@ -97,12 +111,62 @@
                                 <ColumnDefinition/>
                                 <ColumnDefinition Width="100"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Max Risk %" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBlock Text="Commission ($/lot)" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding Commission}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Slippage (pips)" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding Slippage}"/>
+                        </Grid>
+
+                        <TextBlock Text="RISK MANAGEMENT" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="0,20,0,10"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Max Risk / Trade (%)" VerticalAlignment="Center" Foreground="#E0E3EB"/>
                             <TextBox Grid.Column="1" Text="{Binding MaxRiskPerTrade}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Max Positions" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding MaxPositions}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Max Drawdown (%)" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding MaxDrawdown}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Daily Loss Limit (%)" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding MaxDailyLoss}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Min Risk/Reward" VerticalAlignment="Center" Foreground="#E0E3EB"/>
+                            <TextBox Grid.Column="1" Text="{Binding MinRiskReward}"/>
                         </Grid>
 
                         <Button Command="{Binding RunBacktestCommand}" Content="RUN BACKTEST" 
-                                Background="#2962FF" Foreground="White" Height="40" Margin="0,20,0,0" FontWeight="Bold">
+                                Background="#2962FF" Foreground="White" Height="40" Margin="0,30,0,20" FontWeight="Bold">
                             <Button.Resources>
                                 <Style TargetType="Border">
                                     <Setter Property="CornerRadius" Value="4"/>
@@ -136,8 +200,8 @@
 
             <Grid Grid.Row="1">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="6*"/>
-                    <RowDefinition Height="4*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="280"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0">
@@ -147,12 +211,82 @@
                     </StackPanel>
                 </Grid>
 
-                <Border Grid.Row="1" BorderBrush="#2B2B2B" BorderThickness="0,1,0,0">
-                    <Grid Background="#131722">
-                        <scott:WpfPlot x:Name="EquityPlot"/>
-                        <TextBlock Text="EQUITY CURVE" Foreground="#5D606B" FontSize="10" FontWeight="Bold" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10,5" IsHitTestVisible="False"/>
-                    </Grid>
-                </Border>
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="220"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" BorderBrush="#E1E1E1" BorderThickness="0,1,1,0">
+                        <Grid Background="White">
+                            <scott:WpfPlot x:Name="EquityPlot"/>
+
+                            <TextBlock Text="Equity Curve" 
+                   Foreground="#333333" 
+                   FontSize="13" 
+                   FontWeight="Bold" 
+                   FontFamily="Segoe UI"
+                   HorizontalAlignment="Left" 
+                   VerticalAlignment="Top" 
+                   Margin="50,-4,0,0" 
+                   IsHitTestVisible="False"/>
+
+                            <StackPanel x:Name="EquityInfoPanel" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right" 
+                    VerticalAlignment="Top" 
+                    Margin="0,-1,15,0" 
+                    IsHitTestVisible="False">
+                                <TextBlock x:Name="TxtCrosshairInfo" 
+                       Text="" 
+                       FontSize="13" 
+                       FontWeight="SemiBold" 
+                       FontFamily="Consolas"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Background="#1E222D" BorderBrush="#2B2B2B" BorderThickness="0,1,0,0" Padding="15">
+                        <StackPanel>
+                            <TextBlock Text="STATISTIQUES" FontSize="11" FontWeight="Bold" Foreground="#5D606B" Margin="0,0,0,15"/>
+
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Initial Cash" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValInitialCash" Text="-" Style="{StaticResource StatValueStyle}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Final Equity" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValFinalEquity" Text="-" Style="{StaticResource StatValueStyle}"/>
+                            </Grid>
+                            <Separator Background="#2B2B2B" Margin="0,5,0,10"/>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Net Profit" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValNetProfit" Text="-" Style="{StaticResource StatValueStyle}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Return %" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValReturn" Text="-" Style="{StaticResource StatValueStyle}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Max Drawdown" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValMaxDD" Text="-" Style="{StaticResource StatValueStyle}" Foreground="#FF1744"/>
+                            </Grid>
+                            <Separator Background="#2B2B2B" Margin="0,5,0,10"/>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Total Trades" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValTotalTrades" Text="-" Style="{StaticResource StatValueStyle}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Win Rate" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValWinRate" Text="-" Style="{StaticResource StatValueStyle}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="Profit Factor" Style="{StaticResource StatLabelStyle}"/>
+                                <TextBlock x:Name="ValProfitFactor" Text="-" Style="{StaticResource StatValueStyle}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
         </Grid>
     </Grid>
