@@ -175,13 +175,6 @@
                         </Button>
                     </StackPanel>
                 </ScrollViewer>
-
-                <Border VerticalAlignment="Bottom" Background="#181B24" Height="30" Padding="10,0">
-                    <Grid>
-                        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" FontSize="11" Foreground="#2962FF"/>
-                        <ProgressBar IsIndeterminate="True" Height="2" VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Foreground="#2962FF" Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                    </Grid>
-                </Border>
             </Grid>
         </Border>
 
@@ -193,8 +186,38 @@
 
             <Border Grid.Row="0" BorderBrush="#2B2B2B" BorderThickness="0,0,0,1" Padding="15,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="EURUSD" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center" Margin="0,0,20,0"/>
-                    <ComboBox ItemsSource="{Binding AvailableTimeframes}" SelectedItem="{Binding SelectedTimeframe}" Width="100" Height="28"/>
+
+                    <ComboBox ItemsSource="{Binding AvailableTimeframes}" 
+              DisplayMemberPath="Label"
+              SelectedValuePath="Value"
+              SelectedValue="{Binding SelectedTimeframe}"
+              Width="70" Height="28" Margin="0,0,10,0"/>
+
+                    <Grid VerticalAlignment="Center">
+                        <ComboBox ItemsSource="{Binding AvailableIndicators}" 
+              Width="160" Height="30" 
+              VerticalContentAlignment="Center"
+              Background="White">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Name}" 
+                          IsChecked="{Binding IsSelected}" 
+                          Foreground="Black"
+                          FontSize="12"
+                          VerticalAlignment="Center"
+                          Margin="2"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Text="📈 Indicators " 
+               VerticalAlignment="Center" 
+               HorizontalAlignment="Left" 
+               Margin="12,0,0,0" 
+               Foreground="#333333"
+               FontWeight="SemiBold"
+               IsHitTestVisible="False"/>
+                    </Grid>
                 </StackPanel>
             </Border>
 

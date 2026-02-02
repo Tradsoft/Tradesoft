@@ -16,18 +16,29 @@ namespace TradeSoft.UI.ViewModels
         private readonly BacktestService _backtestService;
         private CancellationTokenSource? _cts;
 
+        public ObservableCollection<IndicatorOption> AvailableIndicators { get; } = new();
+
         private DateTime _startDate = new DateTime(2015, 01, 01);
         public DateTime StartDate { get => _startDate; set { _startDate = value; OnPropertyChanged(); LoadMarketData(); } }
 
         private DateTime _endDate = new DateTime(2015, 01, 05);
         public DateTime EndDate { get => _endDate; set { _endDate = value; OnPropertyChanged(); LoadMarketData(); } }
 
-        public ObservableCollection<TimeSpan> AvailableTimeframes { get; } = new() {
-            TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromHours(1),
-            TimeSpan.FromHours(4), TimeSpan.FromDays(1)
-        };
-        private TimeSpan _selectedTimeframe = TimeSpan.FromMinutes(5);
-        public TimeSpan SelectedTimeframe { get => _selectedTimeframe; set { _selectedTimeframe = value; OnPropertyChanged(); LoadMarketData(); } }
+        public ObservableCollection<TimeframeOption> AvailableTimeframes { get; } = new()
+            {
+                new() { Label = "M5",  Value = TimeSpan.FromMinutes(5) },
+                new() { Label = "M15",  Value = TimeSpan.FromMinutes(15) },
+                new() { Label = "H1",  Value = TimeSpan.FromHours(1) },
+                new() { Label = "H4",  Value = TimeSpan.FromHours(4) },
+                new() { Label = "D1",  Value = TimeSpan.FromDays(1) }
+            };
+
+        private TimeSpan _selectedTimeframe = TimeSpan.FromMinutes(15);
+        public TimeSpan SelectedTimeframe
+        {
+            get => _selectedTimeframe;
+            set { _selectedTimeframe = value; OnPropertyChanged(); LoadMarketData(); }
+        }
 
         private double _initialCash = 10000.0;
         public double InitialCash { get => _initialCash; set { _initialCash = value; OnPropertyChanged(); } }
@@ -64,6 +75,33 @@ namespace TradeSoft.UI.ViewModels
             set { _selectedStrategyName = value; OnPropertyChanged(); GenerateParameters(); }
         }
 
+        public class TimeframeOption
+        {
+            public string Label { get; set; } = string.Empty;
+            public TimeSpan Value { get; set; }
+        }
+
+        public class IndicatorOption : INotifyPropertyChanged
+        {
+            public string? Name { get; set; }
+            public string? Type { get; set; } 
+            public int Period { get; set; }
+
+            private bool _isSelected;
+            public bool IsSelected
+            {
+                get => _isSelected;
+                set
+                {
+                    _isSelected = value;
+                    OnSelectionChanged?.Invoke();
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+                }
+            }
+
+            public Action? OnSelectionChanged; // Callback vers le ViewModel
+            public event PropertyChangedEventHandler? PropertyChanged;
+        }
         public ObservableCollection<StrategyParameterViewModel> Parameters { get; } = new();
 
         private string _statusText = "Prêt.";
@@ -82,6 +120,19 @@ namespace TradeSoft.UI.ViewModels
             RunBacktestCommand = new RelayCommand(async () => await RunBacktestAsync());
             GenerateParameters();
             Task.Delay(500).ContinueWith(_ => LoadMarketData());
+
+            AvailableIndicators.Add(new IndicatorOption { Name = "SMA 20 (MAC)", Type = "SMA", Period = 20 });
+            AvailableIndicators.Add(new IndicatorOption { Name = "SMA 50 (MAC)", Type = "SMA", Period = 50 });
+            AvailableIndicators.Add(new IndicatorOption { Name = "Bollinger (MeanRev)", Type = "Bands", Period = 20 });
+            AvailableIndicators.Add(new IndicatorOption { Name = "Donchian (Breakout)", Type = "Breakout", Period = 20 });
+            AvailableIndicators.Add(new IndicatorOption { Name = "RSI Zones (Couleur)", Type = "RSI_Color", Period = 14 });
+            AvailableIndicators.Add(new IndicatorOption { Name = "Parabolic SAR", Type = "PSAR", Period = 0 });
+            AvailableIndicators.Add(new IndicatorOption { Name = "EMA 20", Type = "EMA", Period = 20 });
+
+            foreach (var ind in AvailableIndicators)
+            {
+                ind.OnSelectionChanged = () => OnPropertyChanged(nameof(AvailableIndicators));
+            }
         }
 
         private async void LoadMarketData()
@@ -129,6 +180,7 @@ namespace TradeSoft.UI.ViewModels
                 IsBusy = false;
             }
         }
+
 
         private BacktestConfig CreateConfig()
         {
