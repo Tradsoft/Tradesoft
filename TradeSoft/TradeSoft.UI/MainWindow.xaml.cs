@@ -36,6 +36,15 @@ public partial class MainWindow : Window
         SetupChartStyle();
         SetupEquityChartStyle();
         SetupCrosshair();
+
+        _viewModel.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.AvailableIndicators))
+            {
+                if (_currentBars != null)
+                    Dispatcher.Invoke(() => UpdateMainChart(_currentBars));
+            }
+        };
     }
 
     private void OnMarketDataLoaded(object? sender, List<Bar> bars)
@@ -115,7 +124,7 @@ public partial class MainWindow : Window
                 }
 
                 MainPlot.Plot.ShowLegend();
-                MainPlot.Plot.Legend.Alignment = Alignment.LowerRight;
+                MainPlot.Plot.Legend.Alignment = Alignment.LowerLeft;
                 MainPlot.Plot.Legend.BackgroundColor = Color.FromHex("#1E222D").WithAlpha(200);
                 MainPlot.Plot.Legend.FontColor = Color.FromHex("#D1D4DC");
                 MainPlot.Plot.Legend.OutlineColor = Color.FromHex("#2B2B2B");
@@ -126,6 +135,11 @@ public partial class MainWindow : Window
 
             DrawEquityCurve(result);
             DisplayDetailedStats(result);
+
+            if (result.Logs != null)
+            {
+                _viewModel.LoadLogs(result.Logs);
+            }
         });
     }
 
@@ -163,20 +177,24 @@ public partial class MainWindow : Window
         ValProfitFactor.Text = "-";
     }
 
+    // Modifiez la méthode existante UpdateMainChart
     private void UpdateMainChart(List<Bar> bars)
     {
         _currentBars = bars;
         MainPlot.Plot.Clear();
 
+        // 1. Dessin des Bougies (Code existant)
         var oldLimits = MainPlot.Plot.Axes.GetLimits();
         var candles = bars.Select((b, i) => new OHLC(b.Open, b.High, b.Low, b.Close, DateTime.FromOADate(i), TimeSpan.FromDays(1))).ToList();
-
         var series = MainPlot.Plot.Add.Candlestick(candles);
         series.RisingColor = Color.FromHex("#2962FF");
         series.FallingColor = Color.FromHex("#F23645");
 
-        DateTime[] dates = bars.Select(b => b.Timestamp).ToArray();
+        // 2. NOUVEAU : Dessin des Indicateurs
+        DrawIndicators(bars);
 
+        // 3. Configuration Axes (Code existant)
+        DateTime[] dates = bars.Select(b => b.Timestamp).ToArray();
         MainPlot.Plot.Axes.Bottom.TickGenerator = new NumericAutomatic
         {
             LabelFormatter = (value) => {
@@ -188,6 +206,304 @@ public partial class MainWindow : Window
 
         if (_viewModel.ShouldResetZoom) MainPlot.Plot.Axes.AutoScale();
         else MainPlot.Plot.Axes.SetLimits(oldLimits);
+
+        MainPlot.Refresh();
+    }
+
+    // --- NOUVELLES MÉTHODES DE DESSIN ---
+
+    private void DrawIndicators(List<Bar> bars)
+    {
+        foreach (var ind in _viewModel.AvailableIndicators.Where(i => i.IsSelected))
+        {
+            switch (ind.Type)
+            {
+                case "SMA": DrawSMA(bars, ind.Period); break;
+                case "EMA": DrawEMA(bars, ind.Period); break;
+                case "Bands": DrawBollinger(bars, ind.Period, 2.0); break;
+                case "Breakout": DrawDonchian(bars, ind.Period); break;
+                case "RSI_Color": DrawRSIHighlights(bars, ind.Period); break; 
+                case "PSAR": DrawParabolicSAR(bars); break; 
+            }
+        }
+    }
+
+    private void DrawEMA(List<Bar> bars, int period)
+    {
+        double[] ema = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+        double k = 2.0 / (period + 1);
+
+        double sum = 0;
+        for (int i = 0; i < period && i < bars.Count; i++) sum += bars[i].Close;
+        double prevEma = sum / Math.Min(period, bars.Count);
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            if (i < period)
+            {
+                ema[i] = double.NaN;
+            }
+            else
+            {
+                ema[i] = (bars[i].Close - prevEma) * k + prevEma;
+                prevEma = ema[i];
+            }
+        }
+
+        var line = MainPlot.Plot.Add.ScatterLine(xs, ema);
+        line.Color = Color.FromHex("#FF9800");
+        line.LineWidth = 2;
+    }
+
+    private void DrawSMA(List<Bar> bars, int period)
+    {
+        double[] sma = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            if (i < period - 1)
+            {
+                sma[i] = double.NaN; 
+            }
+            else
+            {
+                double sum = 0;
+                for (int j = 0; j < period; j++) sum += bars[i - j].Close;
+                sma[i] = sum / period;
+            }
+        }
+
+        var line = MainPlot.Plot.Add.ScatterLine(xs, sma);
+        line.Color = period > 30 ? Color.FromHex("#FFA726") : Color.FromHex("#29B6F6"); 
+        line.LineWidth = 2;
+    }
+
+    private void DrawRSIHighlights(List<Bar> bars, int period)
+    {
+        if (bars.Count < period) return;
+
+        double[] rsi = CalculateRSI(bars, period);
+
+        var overboughtX = new List<double>();
+        var overboughtY = new List<double>();
+        var oversoldX = new List<double>();
+        var oversoldY = new List<double>();
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            if (rsi[i] >= 70) 
+            {
+                overboughtX.Add(i);
+                overboughtY.Add(bars[i].High * 1.0005); 
+            }
+            else if (rsi[i] <= 30) 
+            {
+                oversoldX.Add(i);
+                oversoldY.Add(bars[i].Low * 0.9995);
+            }
+        }
+
+        if (overboughtX.Count > 0)
+        {
+            var sc = MainPlot.Plot.Add.Scatter(overboughtX.ToArray(), overboughtY.ToArray());
+            sc.MarkerStyle.Shape = MarkerShape.FilledCircle;
+            sc.MarkerStyle.Size = 5;
+            sc.Color = Color.FromHex("#FF1744"); 
+            sc.LineWidth = 0;
+        }
+
+        if (oversoldX.Count > 0)
+        {
+            var sc = MainPlot.Plot.Add.Scatter(oversoldX.ToArray(), oversoldY.ToArray());
+            sc.MarkerStyle.Shape = MarkerShape.FilledCircle;
+            sc.MarkerStyle.Size = 5;
+            sc.Color = Color.FromHex("#00E676");
+            sc.LineWidth = 0;
+        }
+    }
+
+    private double[] CalculateRSI(List<Bar> bars, int period)
+    {
+        double[] rsi = new double[bars.Count];
+        double avgGain = 0;
+        double avgLoss = 0;
+
+        for (int i = 1; i < bars.Count; i++)
+        {
+            double change = bars[i].Close - bars[i - 1].Close;
+            double gain = change > 0 ? change : 0;
+            double loss = change < 0 ? -change : 0;
+
+            if (i <= period)
+            {
+                avgGain += gain;
+                avgLoss += loss;
+                if (i == period)
+                {
+                    avgGain /= period;
+                    avgLoss /= period;
+                }
+            }
+            else
+            {
+                avgGain = (avgGain * (period - 1) + gain) / period;
+                avgLoss = (avgLoss * (period - 1) + loss) / period;
+            }
+
+            if (i >= period)
+            {
+                double rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
+                rsi[i] = 100 - (100 / (1 + rs));
+            }
+        }
+        return rsi;
+    }
+
+    private void DrawParabolicSAR(List<Bar> bars)
+    {
+        if (bars.Count < 2) return;
+
+        double af = 0.02;
+        double maxAf = 0.2;
+        double[] sar = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        bool isBullish = true;
+        sar[0] = bars[0].Low;
+        double ep = bars[0].High; 
+        double currentAf = af;
+
+        for (int i = 1; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            double prevSar = sar[i - 1];
+
+            sar[i] = prevSar + currentAf * (ep - prevSar);
+
+            if (isBullish)
+            {
+                if (bars[i].Low < sar[i]) 
+                {
+                    isBullish = false;
+                    sar[i] = ep;
+                    ep = bars[i].Low;
+                    currentAf = af;
+                }
+                else
+                {
+                    if (bars[i].High > ep)
+                    {
+                        ep = bars[i].High;
+                        currentAf = Math.Min(currentAf + af, maxAf);
+                    }
+                    sar[i] = Math.Min(sar[i], Math.Min(bars[i - 1].Low, bars[Math.Max(0, i - 2)].Low));
+                }
+            }
+            else
+            {
+                if (bars[i].High > sar[i]) 
+                {
+                    isBullish = true;
+                    sar[i] = ep;
+                    ep = bars[i].High;
+                    currentAf = af;
+                }
+                else
+                {
+                    if (bars[i].Low < ep)
+                    {
+                        ep = bars[i].Low;
+                        currentAf = Math.Min(currentAf + af, maxAf);
+                    }
+                    sar[i] = Math.Max(sar[i], Math.Max(bars[i - 1].High, bars[Math.Max(0, i - 2)].High));
+                }
+            }
+        }
+
+        var scatter = MainPlot.Plot.Add.Scatter(xs, sar);
+        scatter.MarkerStyle.Shape = MarkerShape.FilledCircle;
+        scatter.MarkerStyle.Size = 2; 
+        scatter.Color = Color.FromHex("#787B86"); 
+        scatter.LineWidth = 0;
+    }
+
+    private void DrawBollinger(List<Bar> bars, int period, double k)
+    {
+        double[] upper = new double[bars.Count];
+        double[] lower = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            if (i < period - 1)
+            {
+                upper[i] = double.NaN; lower[i] = double.NaN;
+            }
+            else
+            {
+                double sum = 0;
+                for (int j = 0; j < period; j++) sum += bars[i - j].Close;
+                double mean = sum / period;
+
+                double sumSq = 0;
+                for (int j = 0; j < period; j++)
+                {
+                    double val = bars[i - j].Close;
+                    sumSq += (val - mean) * (val - mean);
+                }
+                double stdDev = Math.Sqrt(sumSq / period);
+
+                upper[i] = mean + k * stdDev;
+                lower[i] = mean - k * stdDev;
+            }
+        }
+
+        var line1 = MainPlot.Plot.Add.ScatterLine(xs, upper);
+        line1.Color = Color.FromHex("#AB47BC"); 
+        line1.LinePattern = LinePattern.Dashed;
+
+        var line2 = MainPlot.Plot.Add.ScatterLine(xs, lower);
+        line2.Color = Color.FromHex("#AB47BC");
+        line2.LinePattern = LinePattern.Dashed;
+    }
+
+    private void DrawDonchian(List<Bar> bars, int period)
+    {
+        double[] highLine = new double[bars.Count];
+        double[] lowLine = new double[bars.Count];
+        double[] xs = new double[bars.Count];
+
+        for (int i = 0; i < bars.Count; i++)
+        {
+            xs[i] = i;
+            if (i < period)
+            {
+                highLine[i] = double.NaN; lowLine[i] = double.NaN;
+            }
+            else
+            {
+                double max = double.MinValue;
+                double min = double.MaxValue;
+                for (int j = 1; j <= period; j++)
+                {
+                    if (bars[i - j].High > max) max = bars[i - j].High;
+                    if (bars[i - j].Low < min) min = bars[i - j].Low;
+                }
+                highLine[i] = max;
+                lowLine[i] = min;
+            }
+        }
+
+        var l1 = MainPlot.Plot.Add.ScatterLine(xs, highLine);
+        l1.Color = Color.FromHex("#66BB6A"); 
+
+        var l2 = MainPlot.Plot.Add.ScatterLine(xs, lowLine);
+        l2.Color = Color.FromHex("#EF5350");
     }
 
     private void SetupEquityChartStyle()
@@ -216,7 +532,6 @@ public partial class MainWindow : Window
     {
         EquityPlot.Plot.Clear();
 
-        // 1. Filtrage et Tri des données
         var data = result.EquityCurve
                          .Where(p => p.Time.Year > 2000 && p.Value > 0)
                          .OrderBy(p => p.Time)
@@ -453,5 +768,9 @@ public partial class MainWindow : Window
             TxtOHLC.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 166, 154));
         else
             TxtOHLC.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 83, 80));
+    }
+
+    private void CbxIndicators_DropDownClosed(object sender, System.EventArgs e)
+    {
     }
 }

@@ -18,7 +18,7 @@ namespace TradeSoft.Engine.Strategies
         public BreakoutSupportResistance(int lookback = 20, double lot = 1.0)
         {
             _lookback = lookback;
-            _lot = lot * 100000;
+            _lot = lot;
         }
 
         protected override void OnProcess(TickContext context)

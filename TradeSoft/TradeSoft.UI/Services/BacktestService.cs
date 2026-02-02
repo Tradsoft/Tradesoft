@@ -9,6 +9,7 @@ using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.DTO;
 using TradeSoft.Core.Pipeline;
+using TradeSoft.Engine;
 using TradeSoft.Engine.Strategies;
 using TradeSoft.Engine.Management;
 using TradeSoft.Engine.Execution;
@@ -45,6 +46,9 @@ namespace TradeSoft.UI.Services
     }
     public class OrderLogger : Handler
     {
+        private readonly List<LogEntryDTO> _logs;
+        public OrderLogger(List<LogEntryDTO> logs) { _logs = logs; }
+
         protected override void OnProcess(TickContext context)
         {
             if (context.NewOrders.Count > 0)
@@ -52,28 +56,29 @@ namespace TradeSoft.UI.Services
                 DateTime time = new DateTime(context.Tick.Timestamp);
                 foreach (var order in context.NewOrders)
                 {
-                    string side = order.Side.ToString().ToUpper();
-                    string type = order.Type.ToString().ToUpper();
-                    System.Diagnostics.Debug.WriteLine($"📋 [INTENTION] {time:dd/MM HH:mm} | {side} {type} | Qty: {order.Quantity}");
+                    string msg = $"{order.Side} {order.Type} | Qty: {order.Quantity:F2}";
+                    _logs.Add(new LogEntryDTO(time, "INTENTION", msg));
                 }
             }
         }
     }
 
-    public class ConsoleTradeLogger : Handler
+    public class ExecutionLogger : Handler
     {
+        private readonly List<LogEntryDTO> _logs;
+        public ExecutionLogger(List<LogEntryDTO> logs) { _logs = logs; }
+
         protected override void OnProcess(TickContext context)
         {
             foreach (var trade in context.Trades)
             {
-                string action = trade.Side.ToString().ToUpper();
-                DateTime tradeTime = new DateTime(trade.Timestamp);
-
-                string log = $"⚡ [EXECUTION] {tradeTime:dd/MM HH:mm} | {action} | Prix: {trade.Price:F5} | Qty: {trade.Quantity}";
-                System.Diagnostics.Debug.WriteLine(log);
+                DateTime time = new DateTime(trade.Timestamp);
+                string msg = $"{trade.Side} | Prix: {trade.Price:F5} | Qty: {trade.Quantity:F2}";
+                _logs.Add(new LogEntryDTO(time, "EXECUTION", msg));
             }
         }
     }
+
     public class BacktestService
     {
         public async Task<List<Bar>> GetHistoricalBarsAsync(BacktestConfig config)
@@ -106,6 +111,8 @@ namespace TradeSoft.UI.Services
         {
             return await Task.Run(() =>
             {
+                var capturedLogs = new List<LogEntryDTO>();
+
                 using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
                 var logger = loggerFactory.CreateLogger<MultiFileTickProvider>();
                 var runnerLogger = loggerFactory.CreateLogger<TradeSoft.Engine.BacktestRunner>();
@@ -118,27 +125,27 @@ namespace TradeSoft.UI.Services
 
                 var barCollector = new BarCollector();
                 var tradeCollector = new TradeCollector();
-                var orderLogger = new OrderLogger();
-                var tradeLogger = new ConsoleTradeLogger();
+
+                var orderLogger = new OrderLogger(capturedLogs);
+                var tradeLogger = new ExecutionLogger(capturedLogs);
 
                 var portfolioManager = new PortfolioManager(config.InitialCash);
-                var broker = new SimulatedBroker(config);
-                var riskManager = new RiskManager(config, portfolioManager);
+                var broker = new SimulatedBroker(config, capturedLogs);
+                var riskManager = new RiskManager(config, portfolioManager, capturedLogs);
+
                 Handler strategy = CreateStrategy(config.Strategy, config.StrategyParameters);
 
                 aggregator.SetNext(barCollector);
                 barCollector.SetNext(strategy);
-                strategy.SetNext(orderLogger);
-                orderLogger.SetNext(riskManager); 
-                riskManager.SetNext(broker); 
-                broker.SetNext(tradeCollector); 
-                tradeCollector.SetNext(tradeLogger); 
-                tradeLogger.SetNext(portfolioManager); 
+                strategy.SetNext(orderLogger);     
+                orderLogger.SetNext(riskManager);   
+                riskManager.SetNext(broker);        
+                broker.SetNext(tradeCollector);     
+                tradeCollector.SetNext(tradeLogger);
+                tradeLogger.SetNext(portfolioManager);
 
-                System.Diagnostics.Debug.WriteLine("=== DÉBUT DU BACKTEST ===");
                 var runner = new TradeSoft.Engine.BacktestRunner(provider, aggregator, runnerLogger);
                 runner.Run(config.Symbol, config.StartDate, config.EndDate, null, token);
-                System.Diagnostics.Debug.WriteLine("=== FIN DU BACKTEST ===");
 
                 var result = StatisticsCalculator.Calculate(portfolioManager.CurrentPortfolio, portfolioManager.EquityCurve);
 
@@ -151,6 +158,8 @@ namespace TradeSoft.UI.Services
                     Quantity = t.Quantity,
                     PnL = 0
                 }).ToList();
+
+                result.Logs = capturedLogs.OrderByDescending(l => l.Time).ToList();
 
                 if (result.EquityCurve.Count == 0) result.FinalEquity = config.InitialCash;
 
@@ -176,9 +185,11 @@ namespace TradeSoft.UI.Services
         private string? FindDataPath()
         {
             string[] paths = new[] {
+                @"C:\Users\Pc\Bureau\Projet\Data\EURUSD",
                 @"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
                 @"C:\Users\louis\source\repos\Tradesoft\Data\EURUSD",
                 @"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\EURUSD",
+                @"C:\Users\inesm\OneDrive\Documents\M2\Tradesoft\Data\EURUSD",
                 Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD"))
             };
             return paths.FirstOrDefault(Directory.Exists);

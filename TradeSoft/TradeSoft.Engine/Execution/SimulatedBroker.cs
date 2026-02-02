@@ -12,6 +12,7 @@ namespace TradeSoft.Engine.Execution
     {
         private readonly BacktestConfig _config;
         private readonly Random _random = new Random();
+        private readonly List<LogEntryDTO> _logs;
 
         private readonly long _latencyTicks = TimeSpan.FromMilliseconds(20).Ticks;
         private readonly Queue<(long ArrivalTime, Order Order)> _networkQueue = new();
@@ -19,9 +20,10 @@ namespace TradeSoft.Engine.Execution
         private readonly List<Order> _activeOrders = new();
         private readonly List<Order> _pendingExits = new List<Order>();
 
-        public SimulatedBroker(BacktestConfig config)
+        public SimulatedBroker(BacktestConfig config, List<LogEntryDTO> logs)
         {
             _config = config;
+            _logs = logs;
         }
 
         protected override void OnProcess(TickContext context)
