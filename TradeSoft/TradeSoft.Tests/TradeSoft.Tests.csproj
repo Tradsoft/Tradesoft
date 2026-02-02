@@ -27,4 +27,8 @@
     <ProjectReference Include="..\TradeSoft.Infrastructure\TradeSoft.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="INFRASTRUCTURE\" />
+  </ItemGroup>
+
 </Project>

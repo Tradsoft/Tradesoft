@@ -155,6 +155,7 @@ namespace TradeSoft.UI.Services
                 @"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
                 @"C:\Users\louis\source\repos\Tradesoft\Data\EURUSD",
                 @"C:\Users\Pc\Bureau\Projet\Data\EURUSD",
+                @"C:\Users\inesm\OneDrive\Documents\M2\Tradesoft\Data\EURUSD",
                 Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD"))
             };
             return paths.FirstOrDefault(Directory.Exists);

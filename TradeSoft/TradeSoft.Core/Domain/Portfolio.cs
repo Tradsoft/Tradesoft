@@ -15,6 +15,15 @@
 
         public void OnTrade(Trade trade)
         {
+            if (trade == null)
+                throw new ArgumentNullException(nameof(trade));
+
+            if (trade.Quantity <= 0)
+                throw new ArgumentException("Quantity must be positive", nameof(trade.Quantity));
+
+            if (trade.Price <= 0)
+                throw new ArgumentException("Price must be positive", nameof(trade.Price));
+
             Balance -= trade.Commission;
 
             double qtyRemainingToProcess = trade.Quantity;

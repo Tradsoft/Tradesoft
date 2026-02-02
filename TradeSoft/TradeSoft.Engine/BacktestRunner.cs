@@ -27,7 +27,7 @@ namespace TradeSoft.Engine
 
             if (end < start)
             {
-                (start, end) = (end, start);
+                throw new ArgumentException("end must be greater than or equal to start.", nameof(end));
             }
             if (end == start)
             {

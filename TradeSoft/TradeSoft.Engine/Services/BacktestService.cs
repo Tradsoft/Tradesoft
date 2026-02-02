@@ -23,10 +23,12 @@ namespace TradeSoft.Engine.Services
         }
 
         public async Task<BacktestResult> RunBacktestAsync(
-            BacktestConfig config,
-            IProgress<float>? progress = null,
-            CancellationToken cancellationToken = default)
+    BacktestConfig config,
+    IProgress<float>? progress = null,
+    CancellationToken cancellationToken = default)
         {
+            ValidateConfig(config);
+
             return await Task.Run(() =>
             {
                 var portfolioManager = new PortfolioManager(config.InitialCash);
@@ -50,6 +52,28 @@ namespace TradeSoft.Engine.Services
 
             }, cancellationToken);
         }
+        private static void ValidateConfig(BacktestConfig config)
+        {
+            if (config is null)
+                throw new ArgumentNullException(nameof(config));
+
+            if (string.IsNullOrWhiteSpace(config.Symbol))
+                throw new ArgumentException("Symbol is required.", nameof(config.Symbol));
+
+            if (config.EndDate < config.StartDate)
+                throw new ArgumentException("EndDate must be greater than or equal to StartDate.", nameof(config.EndDate));
+
+            if (config.LotSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(config.LotSize), "LotSize must be > 0.");
+
+            if (config.MinLotSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(config.MinLotSize), "MinLotSize must be > 0.");
+
+            if (config.MinLotSize > config.LotSize)
+                throw new ArgumentException("MinLotSize must be <= LotSize.", nameof(config.MinLotSize));
+        }
+
+
 
         private Handler CreateStrategy(BacktestConfig config)
         {
