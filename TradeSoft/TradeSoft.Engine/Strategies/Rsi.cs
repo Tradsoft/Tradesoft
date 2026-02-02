@@ -11,25 +11,23 @@ namespace TradeSoft.Engine.Strategies
         private readonly double _oversold;
         private readonly double _overbought;
         private readonly double _lot;
-
         private readonly double _slPips;
         private readonly double _tpPips;
 
+        private readonly double _tickSize;
+
         private bool _hasPrevPrice;
         private double _prevPrice;
-
         private bool _initialized;
         private int _initCount;
         private double _sumGain;
         private double _sumLoss;
         private double _avgGain;
         private double _avgLoss;
-
         private double? _prevRsi;
-
         private int _currentDirection = 0;
 
-        public RSI(int period = 14, double oversold = 30, double overbought = 70, double lot = 1.0, double slPips = 50, double tpPips = 100)
+        public RSI(int period = 14, double oversold = 30, double overbought = 70, double lot = 1.0, double slPips = 50, double tpPips = 100, double tickSize = 0.01)
         {
             if (period <= 1) throw new ArgumentOutOfRangeException(nameof(period));
             _period = period;
@@ -38,22 +36,17 @@ namespace TradeSoft.Engine.Strategies
             _lot = lot;
             _slPips = slPips;
             _tpPips = tpPips;
+            _tickSize = tickSize;
         }
 
         protected override void OnProcess(TickContext context)
         {
             if (context.GeneratedBar == null) return;
             var bar = context.GeneratedBar;
-
             double price = bar.Close;
             long ts = bar.Timestamp.Ticks;
 
-            if (!_hasPrevPrice)
-            {
-                _hasPrevPrice = true;
-                _prevPrice = price;
-                return;
-            }
+            if (!_hasPrevPrice) { _hasPrevPrice = true; _prevPrice = price; return; }
 
             double change = price - _prevPrice;
             _prevPrice = price;
@@ -63,12 +56,8 @@ namespace TradeSoft.Engine.Strategies
 
             if (!_initialized)
             {
-                _sumGain += gain;
-                _sumLoss += loss;
-                _initCount++;
-
+                _sumGain += gain; _sumLoss += loss; _initCount++;
                 if (_initCount < _period) return;
-
                 _avgGain = _sumGain / _period;
                 _avgLoss = _sumLoss / _period;
                 _initialized = true;
@@ -90,33 +79,30 @@ namespace TradeSoft.Engine.Strategies
                 if (buySignal && _currentDirection != 1)
                 {
                     SendOrder(context, Side.Buy, price, rsi, ts);
-                    _currentDirection = 1; 
+                    _currentDirection = 1;
                 }
                 else if (sellSignal && _currentDirection != -1)
                 {
                     SendOrder(context, Side.Sell, price, rsi, ts);
-                    _currentDirection = -1; 
+                    _currentDirection = -1;
                 }
             }
-
             _prevRsi = rsi;
         }
 
         private void SendOrder(TickContext context, Side side, double price, double rsi, long timestamp)
         {
-            double tickSize = 0.0001;
-
             double slPrice, tpPrice;
 
             if (side == Side.Buy)
             {
-                slPrice = price - (_slPips * tickSize);
-                tpPrice = price + (_tpPips * tickSize);
+                slPrice = price - (_slPips * _tickSize);
+                tpPrice = price + (_tpPips * _tickSize);
             }
             else
             {
-                slPrice = price + (_slPips * tickSize);
-                tpPrice = price - (_tpPips * tickSize);
+                slPrice = price + (_slPips * _tickSize);
+                tpPrice = price - (_tpPips * _tickSize);
             }
 
             context.NewOrders.Add(new Order
@@ -128,8 +114,8 @@ namespace TradeSoft.Engine.Strategies
                 Quantity = _lot,
                 Type = OrderType.Market,
                 Price = price,
-                StopLoss = slPrice,   
-                TakeProfit = tpPrice, 
+                StopLoss = slPrice,
+                TakeProfit = tpPrice,
                 Comment = $"RSI_{rsi:F1}"
             });
 
