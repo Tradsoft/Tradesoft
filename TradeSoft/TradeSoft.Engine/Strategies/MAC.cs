@@ -30,7 +30,7 @@ namespace TradeSoft.Engine.Strategies
 
             _shortPeriod = shortPeriod;
             _longPeriod = longPeriod;
-            _lotSize = lot * 100000;
+            _lotSize = lot;
         }
 
         protected override void OnProcess(TickContext context)
