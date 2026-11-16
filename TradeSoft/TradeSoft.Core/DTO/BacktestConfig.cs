@@ -20,7 +20,7 @@ namespace TradeSoft.Core.DTO
         public double CommissionPerLot { get; set; } = 2.5;
         public CommissionType CommissionType { get; set; } = CommissionType.Fixed;
         public double SlippagePips { get; set; } = 0.0;
-        public double TickSize { get; set; } = 0.01;
+        public double TickSize { get; set; } = 0.0001;
 
         public double MinLotSize { get; set; } = 1.0;
         public double LotSize { get; set; } = 1.0;
@@ -45,6 +45,7 @@ namespace TradeSoft.Core.DTO
         public double ProfitFactor { get; set; }
         public double MaxDrawdownPercent { get; set; }
         public List<TradeResultItem> Trades { get; set; } = new();
+        public List<ClosedTrade> ClosedTrades { get; set; } = new();
         public List<EquityPoint> EquityCurve { get; set; } = new();
         public List<Bar> Bars { get; set; } = new();
         public List<LogEntryDTO> Logs { get; set; } = new();

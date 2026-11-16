@@ -69,7 +69,7 @@ namespace TradeSoft.UI.ViewModels
         private double _minRR = 1.0;
         public double MinRiskReward { get => _minRR; set { _minRR = value; OnPropertyChanged(); } }
 
-        public ObservableCollection<string> StrategyNames { get; } = new() { "RSI", "MAC", "MeanReversion", "Breakout" };
+        public ObservableCollection<string> StrategyNames { get; } = new() { "RSI", "MAC", "MeanReversion", "Breakout", "Random" };
         private string _selectedStrategyName = "RSI";
         public string SelectedStrategyName
         {
@@ -85,10 +85,13 @@ namespace TradeSoft.UI.ViewModels
             foreach (var log in sourceLogs.OrderByDescending(l => l.Time))
             {
                 string color = "#B0B3B8";
-                if (log.Type.Contains("EXECUTION")) color = "#00E676"; 
-                if (log.Type.Contains("REJET")) color = "#FF1744";     
-                if (log.Type.Contains("BUY")) color = "#2962FF";       
-                if (log.Type.Contains("SELL")) color = "#FF9100";      
+                if (log.Type.Contains("EXECUTION")) color = "#00E676";
+                else if (log.Type.Contains("REJET")) color = "#FF1744";
+                else if (log.Type.Contains("INTENTION"))
+                {
+                    if (log.Message.Contains("Buy", StringComparison.OrdinalIgnoreCase)) color = "#2962FF";
+                    else if (log.Message.Contains("Sell", StringComparison.OrdinalIgnoreCase)) color = "#FF9100";
+                }
 
                 Logs.Add(new LogEntryDisplay
                 {
@@ -232,7 +235,7 @@ namespace TradeSoft.UI.ViewModels
 
                 MinLotSize = 1.0,
                 LotSize = 1.0,
-                TickSize = 0.01
+                TickSize = 0.0001
             };
             foreach (var p in Parameters) config.StrategyParameters[p.Name] = p.Value;
             return config;
@@ -249,7 +252,7 @@ namespace TradeSoft.UI.ViewModels
         {
             return strategyName switch
             {
-                "RSI" => new() { { "Period", 14 }, { "Oversold", 30 }, { "Overbought", 70 }, { "Lot", 1.0 }, { "SL Pips", 50 }, { "TP Pips", 100 }, { "Tick Size", 0.01 } },
+                "RSI" => new() { { "Period", 14 }, { "Oversold", 30 }, { "Overbought", 70 }, { "Lot", 1.0 }, { "SL Pips", 50 }, { "TP Pips", 100 }, { "Tick Size", 0.0001 } },
                 "MAC" => new() { { "Short Period", 20 }, { "Long Period", 50 }, { "Lot", 1.0 } },
                 "MeanReversion" => new() { { "Period", 20 }, { "K", 2.0 }, { "Lot", 1.0 } },
                 "Breakout" => new() { { "Lookback", 20 }, { "Lot", 1.0 } },
@@ -283,7 +286,7 @@ namespace TradeSoft.UI.ViewModels
     {
         private readonly Func<Task> _execute;
         public RelayCommand(Func<Task> execute) => _execute = execute;
-        public event EventHandler? CanExecuteChanged;
+        public event EventHandler? CanExecuteChanged { add { } remove { } }
         public bool CanExecute(object? parameter) => true;
         public async void Execute(object? parameter) => await _execute();
     }

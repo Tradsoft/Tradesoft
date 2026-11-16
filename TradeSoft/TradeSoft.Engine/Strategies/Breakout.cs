@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.Pipeline;
@@ -8,17 +10,20 @@ namespace TradeSoft.Engine.Strategies
 {
     public class BreakoutSupportResistance : Handler
     {
+        private static long _nextOrderId;
         private readonly int _lookback;
         private readonly double _lot;
+        private readonly string _symbol;
         private readonly Queue<double> _window = new();
         private double _positionLots = 0.0;
 
         private const double SafetyStopLossPercent = 0.02;
 
-        public BreakoutSupportResistance(int lookback = 20, double lot = 1.0)
+        public BreakoutSupportResistance(int lookback = 20, double lot = 1.0, string symbol = "EURUSD")
         {
             _lookback = lookback;
             _lot = lot;
+            _symbol = symbol;
         }
 
         protected override void OnProcess(TickContext context)
@@ -60,7 +65,7 @@ namespace TradeSoft.Engine.Strategies
         {
             double delta = targetLots - _positionLots;
 
-            if (Math.Abs(delta) < 1.0) return;
+            if (Math.Abs(delta) <= 1e-9) return;
 
             Side side = delta > 0 ? Side.Buy : Side.Sell;
             double qty = Math.Abs(delta);
@@ -73,9 +78,9 @@ namespace TradeSoft.Engine.Strategies
 
             context.NewOrders.Add(new Order
             {
-                Id = DateTime.UtcNow.Ticks,
+                Id = Interlocked.Increment(ref _nextOrderId),
                 Timestamp = ts,
-                Symbol = "EURUSD",
+                Symbol = _symbol,
                 Side = side,
                 Quantity = qty,
                 Type = OrderType.Market,
@@ -84,7 +89,7 @@ namespace TradeSoft.Engine.Strategies
             });
 
             _positionLots = targetLots;
-            Console.WriteLine($"[Breakout] {label} | P={price:F2} | SL={slPrice:F2} | Range=[{s:F2}-{r:F2}]");
+            Debug.WriteLine($"[Breakout] {label} | P={price:F5} | SL={slPrice:F5} | Range=[{s:F5}-{r:F5}]");
         }
     }
 }

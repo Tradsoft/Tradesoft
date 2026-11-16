@@ -11,8 +11,8 @@ namespace TradeSoft.Engine.Execution
     public class SimulatedBroker : Handler
     {
         private readonly BacktestConfig _config;
-        private readonly Random _random = new Random();
-        private readonly List<LogEntryDTO> _logs;
+        private readonly List<LogEntryDTO>? _logs;
+        private long _nextOrderId = 1;
 
         private readonly long _latencyTicks = TimeSpan.FromMilliseconds(20).Ticks;
         private readonly Queue<(long ArrivalTime, Order Order)> _networkQueue = new();
@@ -20,7 +20,7 @@ namespace TradeSoft.Engine.Execution
         private readonly List<Order> _activeOrders = new();
         private readonly List<Order> _pendingExits = new List<Order>();
 
-        public SimulatedBroker(BacktestConfig config, List<LogEntryDTO> logs)
+        public SimulatedBroker(BacktestConfig config, List<LogEntryDTO>? logs = null)
         {
             _config = config;
             _logs = logs;
@@ -34,6 +34,10 @@ namespace TradeSoft.Engine.Execution
 
             foreach (var order in context.NewOrders)
             {
+                if (order.Id <= 0)
+                {
+                    order.Id = _nextOrderId++;
+                }
                 _networkQueue.Enqueue((currentKw + _latencyTicks, order));
             }
             context.NewOrders.Clear();
@@ -79,7 +83,7 @@ namespace TradeSoft.Engine.Execution
                         {
                             string parentId = parts[2];
 
-                            int partnerIndex = _pendingExits.FindIndex(o => o.Comment != null && o.Comment.Contains(parentId));
+                            int partnerIndex = _pendingExits.FindIndex(o => o.Comment != null && o.Comment.EndsWith($"_{parentId}"));
 
                             if (partnerIndex != -1)
                             {
@@ -116,6 +120,17 @@ namespace TradeSoft.Engine.Execution
                     {
                         triggered = true;
                         limitPrice = order.Price;
+                    }
+                }
+                else if (order.Type == OrderType.Stop)
+                {
+                    if (order.Side == Side.Buy && ask >= order.Price)
+                    {
+                        triggered = true;
+                    }
+                    else if (order.Side == Side.Sell && bid <= order.Price)
+                    {
+                        triggered = true;
                     }
                 }
 
@@ -162,9 +177,14 @@ namespace TradeSoft.Engine.Execution
             context.Trades.Add(trade);
             order.IsFilled = true;
 
-            if (!IsExitOrder(order) && (order.StopLoss.HasValue || order.TakeProfit.HasValue))
+            if (!IsExitOrder(order))
             {
-                RegisterProtections(order);
+                _pendingExits.RemoveAll(o => o.Symbol == order.Symbol && o.Side == order.Side && IsExitOrder(o));
+
+                if (order.StopLoss.HasValue || order.TakeProfit.HasValue)
+                {
+                    RegisterProtections(order);
+                }
             }
         }
 
@@ -176,7 +196,7 @@ namespace TradeSoft.Engine.Execution
             {
                 _pendingExits.Add(new Order
                 {
-                    Id = DateTime.UtcNow.Ticks,
+                    Id = _nextOrderId++,
                     Symbol = parent.Symbol,
                     Side = exitSide,
                     Quantity = parent.Quantity,
@@ -190,7 +210,7 @@ namespace TradeSoft.Engine.Execution
             {
                 _pendingExits.Add(new Order
                 {
-                    Id = DateTime.UtcNow.Ticks + 1,
+                    Id = _nextOrderId++,
                     Symbol = parent.Symbol,
                     Side = exitSide,
                     Quantity = parent.Quantity,

@@ -15,6 +15,15 @@
 
         public void OnTrade(Trade trade)
         {
+            if (trade == null)
+                throw new ArgumentNullException(nameof(trade));
+
+            if (trade.Quantity <= 0)
+                throw new ArgumentException("Quantity must be positive", nameof(trade.Quantity));
+
+            if (trade.Price <= 0)
+                throw new ArgumentException("Price must be positive", nameof(trade.Price));
+
             Balance -= trade.Commission;
 
             double qtyRemainingToProcess = trade.Quantity;
@@ -41,7 +50,9 @@
 
                 Balance += grossPnL;
 
-                double entryComm = trade.Commission * (qtyToClose / trade.Quantity);
+                double entryCommPart = pos.Quantity > 0 ? pos.EntryCommission * (qtyToClose / pos.Quantity) : 0;
+                pos.EntryCommission -= entryCommPart;
+                double exitCommPart = trade.Commission * (qtyToClose / trade.Quantity);
 
                 var closedTrade = new ClosedTrade
                 {
@@ -52,8 +63,8 @@
                     Quantity = qtyToClose,
                     EntryTime = pos.EntryTime,
                     ExitTime = new DateTime(trade.Timestamp),
-                    PnL = grossPnL, 
-                    Commission = entryComm 
+                    PnL = grossPnL,
+                    Commission = entryCommPart + exitCommPart
                 };
                 History.Add(closedTrade);
 
@@ -76,7 +87,8 @@
                     Quantity = qtyRemainingToProcess,
                     EntryPrice = trade.Price,
                     EntryTime = new DateTime(trade.Timestamp),
-                    CurrentPrice = trade.Price
+                    CurrentPrice = trade.Price,
+                    EntryCommission = trade.Commission * (qtyRemainingToProcess / trade.Quantity)
                 };
                 Positions.Add(newPos);
             }

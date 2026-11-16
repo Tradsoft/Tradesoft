@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.Pipeline;
@@ -9,9 +11,11 @@ namespace TradeSoft.Engine.Strategies
 {
     public sealed class MovingAverageCrossover : Handler
     {
+        private static long _nextOrderId;
         private readonly int _shortPeriod;
         private readonly int _longPeriod;
         private readonly double _lotSize;
+        private readonly string _symbol;
 
         private readonly Queue<double> _shortWindow = new();
         private readonly Queue<double> _longWindow = new();
@@ -24,13 +28,14 @@ namespace TradeSoft.Engine.Strategies
         private readonly double _epsilon = 0.00001;
         private const double SafetyStopLossPercent = 0.02;
 
-        public MovingAverageCrossover(int shortPeriod = 20, int longPeriod = 50, double lot = 1.0)
+        public MovingAverageCrossover(int shortPeriod = 20, int longPeriod = 50, double lot = 1.0, string symbol = "EURUSD")
         {
             if (longPeriod <= shortPeriod) throw new ArgumentException("Long period must be greater than Short period");
 
             _shortPeriod = shortPeriod;
             _longPeriod = longPeriod;
             _lotSize = lot;
+            _symbol = symbol;
         }
 
         protected override void OnProcess(TickContext context)
@@ -78,7 +83,7 @@ namespace TradeSoft.Engine.Strategies
             double currentPos = (_currentDirection == 1) ? _lotSize : (_currentDirection == -1 ? -_lotSize : 0);
             double delta = targetUnits - currentPos;
 
-            if (Math.Abs(delta) < 1) return;
+            if (Math.Abs(delta) <= 1e-9) return;
 
             Side side = delta > 0 ? Side.Buy : Side.Sell;
             double qty = Math.Abs(delta);
@@ -91,9 +96,9 @@ namespace TradeSoft.Engine.Strategies
 
             context.NewOrders.Add(new Order
             {
-                Id = DateTime.UtcNow.Ticks,
+                Id = Interlocked.Increment(ref _nextOrderId),
                 Timestamp = ts,
-                Symbol = "EURUSD",
+                Symbol = _symbol,
                 Side = side,
                 Quantity = qty,
                 Type = OrderType.Market,
@@ -102,7 +107,7 @@ namespace TradeSoft.Engine.Strategies
                 Comment = $"MA_Cross_{label}"
             });
 
-            Console.WriteLine($"[MA] {label} | P={price:F2} | SL={slPrice:F2} | MA{_shortPeriod}={sMa:F2} MA{_longPeriod}={lMa:F2}");
+            Debug.WriteLine($"[MA] {label} | P={price:F5} | SL={slPrice:F5} | MA{_shortPeriod}={sMa:F5} MA{_longPeriod}={lMa:F5}");
         }
 
         private void SendOrder(TickContext context, double quantity, double price, string label, double sMa, double lMa, long ts)

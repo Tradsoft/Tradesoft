@@ -230,20 +230,26 @@ public partial class MainWindow : Window
 
     private void DrawEMA(List<Bar> bars, int period)
     {
+        if (bars.Count < period || period <= 0) return;
+
         double[] ema = new double[bars.Count];
         double[] xs = new double[bars.Count];
         double k = 2.0 / (period + 1);
 
         double sum = 0;
-        for (int i = 0; i < period && i < bars.Count; i++) sum += bars[i].Close;
-        double prevEma = sum / Math.Min(period, bars.Count);
+        for (int i = 0; i < period; i++) sum += bars[i].Close;
+        double prevEma = sum / period;
 
         for (int i = 0; i < bars.Count; i++)
         {
             xs[i] = i;
-            if (i < period)
+            if (i < period - 1)
             {
                 ema[i] = double.NaN;
+            }
+            else if (i == period - 1)
+            {
+                ema[i] = prevEma;
             }
             else
             {
@@ -329,6 +335,7 @@ public partial class MainWindow : Window
     private double[] CalculateRSI(List<Bar> bars, int period)
     {
         double[] rsi = new double[bars.Count];
+        Array.Fill(rsi, double.NaN);
         double avgGain = 0;
         double avgLoss = 0;
 
@@ -356,8 +363,19 @@ public partial class MainWindow : Window
 
             if (i >= period)
             {
-                double rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
-                rsi[i] = 100 - (100 / (1 + rs));
+                if (avgGain == 0.0 && avgLoss == 0.0)
+                {
+                    rsi[i] = 50.0;
+                }
+                else if (avgLoss == 0.0)
+                {
+                    rsi[i] = 100.0;
+                }
+                else
+                {
+                    double rs = avgGain / avgLoss;
+                    rsi[i] = 100.0 - (100.0 / (1.0 + rs));
+                }
             }
         }
         return rsi;

@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.Pipeline;
@@ -8,9 +10,11 @@ namespace TradeSoft.Engine.Strategies
 {
     public class MeanReversion : Handler
     {
+        private static long _nextOrderId;
         private readonly int _period;
         private readonly double _k;
         private readonly double _lot;
+        private readonly string _symbol;
 
         private readonly Queue<double> _window = new();
         private double _sum;
@@ -19,11 +23,12 @@ namespace TradeSoft.Engine.Strategies
 
         private const double SafetyStopLossPercent = 0.02;
 
-        public MeanReversion(int period = 20, double k = 2.0, double lot = 1.0)
+        public MeanReversion(int period = 20, double k = 2.0, double lot = 1.0, string symbol = "EURUSD")
         {
             _period = period;
             _k = k;
             _lot = lot;
+            _symbol = symbol;
         }
 
         protected override void OnProcess(TickContext context)
@@ -68,7 +73,7 @@ namespace TradeSoft.Engine.Strategies
         {
             double delta = targetUnits - _positionLots;
 
-            if (Math.Abs(delta) < 1.0) return;
+            if (Math.Abs(delta) <= 1e-9) return;
 
             Side side = delta > 0 ? Side.Buy : Side.Sell;
             double qty = Math.Abs(delta);
@@ -81,9 +86,9 @@ namespace TradeSoft.Engine.Strategies
 
             context.NewOrders.Add(new Order
             {
-                Id = DateTime.UtcNow.Ticks,
+                Id = Interlocked.Increment(ref _nextOrderId),
                 Timestamp = ts,
-                Symbol = "EURUSD",
+                Symbol = _symbol,
                 Side = side,
                 Quantity = qty,
                 Type = OrderType.Market,
@@ -92,7 +97,7 @@ namespace TradeSoft.Engine.Strategies
             });
 
             _positionLots = targetUnits;
-            Console.WriteLine($"[MeanRev] {label} | P={price:F2} | SL={slPrice:F2} | Bands=[{lower:F2}, {upper:F2}]");
+            Debug.WriteLine($"[MeanRev] {label} | P={price:F5} | SL={slPrice:F5} | Bands=[{lower:F5}, {upper:F5}]");
         }
     }
 }

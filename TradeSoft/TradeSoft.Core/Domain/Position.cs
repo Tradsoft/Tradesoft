@@ -11,6 +11,7 @@ namespace TradeSoft.Core.Domain
         public double EntryPrice { get; set; }
         public DateTime EntryTime { get; set; }
         public double CurrentPrice { get; set; }
+        public double EntryCommission { get; set; }
         public double UnrealizedPnL
         {
             get

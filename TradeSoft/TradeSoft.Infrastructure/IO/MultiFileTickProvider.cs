@@ -37,18 +37,74 @@ namespace TradeSoft.Infrastructure.IO
             {
                 using (loader)
                 {
-                    int count = (int)loader.Count;
-                    for (int i = 0; i < count; i++)
+                    foreach (var tick in ReadTicksInRange(loader, startTicks, endTicks))
                     {
-                        TickData tick = loader.GetTick(i);
-
-                        if (tick.Timestamp >= startTicks && tick.Timestamp <= endTicks)
-                        {
-                            yield return tick;
-                        }
+                        yield return tick;
                     }
                 }
             }
+        }
+
+        private static List<TickData> ReadTicksInRange(BinaryTickLoader loader, long startTicks, long endTicks)
+        {
+            if (loader.Count == 0)
+            {
+                return new List<TickData>();
+            }
+
+            var span = loader.GetTicksAsSpan(loader.Count);
+            var ticks = new List<TickData>(span.Length);
+
+            for (int i = 0; i < span.Length; i++)
+            {
+                TickData tick = span[i];
+                if (tick.Timestamp >= startTicks && tick.Timestamp <= endTicks)
+                {
+                    ticks.Add(tick);
+                }
+            }
+
+            return ticks;
+        }
+
+        public static string? FindDataDirectory(string symbol = "EURUSD")
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+            string installPath = Path.Combine(baseDir, "Data", symbol);
+            if (Directory.Exists(installPath))
+            {
+                return installPath;
+            }
+
+            string? current = baseDir;
+            for (int i = 0; i <= 6 && current != null; i++)
+            {
+                string directData = Path.Combine(current, "Data", symbol);
+                if (Directory.Exists(directData))
+                {
+                    return directData;
+                }
+
+                string nestedData = Path.Combine(current, "TradeSoft", "Data", symbol);
+                if (Directory.Exists(nestedData))
+                {
+                    return nestedData;
+                }
+
+                current = Directory.GetParent(current)?.FullName;
+            }
+
+            var fallbackPaths = new[]
+            {
+                $@"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\{symbol}",
+                $@"C:\Users\louis\source\repos\Tradesoft\Data\{symbol}",
+                $@"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\{symbol}\{symbol}",
+                $@"C:\Users\Pc\Bureau\Projet\Data\{symbol}",
+                $@"C:\Users\inesm\OneDrive\Documents\M2\Tradesoft\Data\{symbol}"
+            };
+
+            return fallbackPaths.FirstOrDefault(Directory.Exists);
         }
 
         public IEnumerable<BinaryTickLoader> GetLoaders(string symbol, DateTime start, DateTime end)

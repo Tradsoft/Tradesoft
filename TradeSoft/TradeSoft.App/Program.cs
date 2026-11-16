@@ -9,7 +9,6 @@ using TradeSoft.Core.Services;
 using TradeSoft.Engine.Services;
 using TradeSoft.Infrastructure.IO;
 using TradeSoft.Infrastructure.Persistence;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 class Program
 {
@@ -30,24 +29,12 @@ class Program
         // =========================================================
         // 2. CONFIGURATION DES CHEMINS DE DONNÉES
         // =========================================================
-        string[] cheminsPossibles = new[]
-        {
-            @"C:\Users\FlowUP\source\repos\GitHub\Tradesoft\Data\EURUSD",
-            @"C:\Users\aleja\OneDrive - Efrei\Documents\GitHub\Tradesoft\TradeSoft\Data\EURUSD\EURUSD",
-            @"C:\Users\Pc\Bureau\Projet\Data\EURUSD",
-            @"C:\Users\inesm\OneDrive\Documents\M2\Tradesoft\Data\EURUSD",
-            @"C:\Users\louis\source\repos\Tradesoft\Data\EURUSD",
-            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\Data\EURUSD")),
-        };
-
-        string? dossierData = cheminsPossibles.FirstOrDefault(path => Directory.Exists(path));
+        string? dossierData = MultiFileTickProvider.FindDataDirectory("EURUSD");
 
         if (string.IsNullOrEmpty(dossierData))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("ERREUR : Aucune donnée trouvée !");
-            Console.WriteLine("Chemins testés :");
-            foreach (var p in cheminsPossibles) Console.WriteLine($" - {p}");
+            Console.WriteLine("ERREUR : Aucune donnée trouvée pour EURUSD dans Data/EURUSD !");
             Console.ResetColor();
             return;
         }
@@ -209,8 +196,8 @@ class Program
 
             case 2:
                 Console.WriteLine("\n[PARAMÈTRES MA]");
-                paramsDict["ShortPeriod"] = ReadInt("MA Courte (défaut 20) : ", 20);
-                paramsDict["LongPeriod"] = ReadInt("MA Longue (défaut 50) : ", 50);
+                paramsDict["Short Period"] = ReadInt("MA Courte (défaut 20) : ", 20);
+                paramsDict["Long Period"] = ReadInt("MA Longue (défaut 50) : ", 50);
                 return (StrategyType.MAC, paramsDict);
 
             case 3:

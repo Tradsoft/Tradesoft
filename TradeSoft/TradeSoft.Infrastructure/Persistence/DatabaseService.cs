@@ -60,23 +60,51 @@ namespace TradeSoft.Infrastructure.Persistence
             {
                 string runId = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-                foreach (var trade in result.Trades)
+                if (result.ClosedTrades != null && result.ClosedTrades.Count > 0)
                 {
-                    connection.Execute(@"
-                INSERT INTO Trades 
-                (Strategy, Symbol, EntryTime, ExitTime, Side, EntryPrice, ExitPrice, Quantity, PnL, Commission) 
-                VALUES 
-                (@Strategy, @Symbol, @Time, @Time, @Side, @Price, @Price, @Quantity, @PnL, 0)",
-                        new
-                        {
-                            config.Strategy,
-                            config.Symbol,
-                            trade.Time,
-                            trade.Side,
-                            trade.Price,
-                            trade.Quantity,
-                            trade.PnL
-                        }, transaction);
+                    foreach (var trade in result.ClosedTrades)
+                    {
+                        connection.Execute(@"
+                    INSERT INTO Trades 
+                    (Strategy, Symbol, EntryTime, ExitTime, Side, EntryPrice, ExitPrice, Quantity, PnL, Commission, DurationMinutes) 
+                    VALUES 
+                    (@Strategy, @Symbol, @EntryTime, @ExitTime, @Side, @EntryPrice, @ExitPrice, @Quantity, @PnL, @Commission, @DurationMinutes)",
+                            new
+                            {
+                                Strategy = config.Strategy.ToString(),
+                                Symbol = string.IsNullOrEmpty(trade.Symbol) ? config.Symbol : trade.Symbol,
+                                EntryTime = trade.EntryTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                                ExitTime = trade.ExitTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                                Side = trade.Direction.ToString(),
+                                trade.EntryPrice,
+                                trade.ExitPrice,
+                                trade.Quantity,
+                                trade.PnL,
+                                trade.Commission,
+                                DurationMinutes = trade.DurationSeconds / 60.0
+                            }, transaction);
+                    }
+                }
+                else
+                {
+                    foreach (var trade in result.Trades)
+                    {
+                        connection.Execute(@"
+                    INSERT INTO Trades 
+                    (Strategy, Symbol, EntryTime, ExitTime, Side, EntryPrice, ExitPrice, Quantity, PnL, Commission, DurationMinutes) 
+                    VALUES 
+                    (@Strategy, @Symbol, @Time, @Time, @Side, @Price, @Price, @Quantity, @PnL, 0, 0)",
+                            new
+                            {
+                                Strategy = config.Strategy.ToString(),
+                                config.Symbol,
+                                Time = trade.Time.ToString("yyyy-MM-dd HH:mm:ss"),
+                                trade.Side,
+                                trade.Price,
+                                trade.Quantity,
+                                trade.PnL
+                            }, transaction);
+                    }
                 }
 
                 foreach (var point in result.EquityCurve)

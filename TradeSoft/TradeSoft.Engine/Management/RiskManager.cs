@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.DTO;
@@ -11,13 +13,13 @@ namespace TradeSoft.Engine.Management
         private readonly BacktestConfig _config;
         private readonly PortfolioManager _portfolioManager;
 
-        private readonly List<LogEntryDTO> _logs;
+        private readonly List<LogEntryDTO>? _logs;
 
         private DateTime _currentDate = DateTime.MinValue;
         private double _startOfDayEquity;
         private bool _dailyLossLimitReached = false;
 
-        public RiskManager(BacktestConfig config, PortfolioManager portfolioManager, List<LogEntryDTO> logs)
+        public RiskManager(BacktestConfig config, PortfolioManager portfolioManager, List<LogEntryDTO>? logs = null)
         {
             _config = config;
             _portfolioManager = portfolioManager;
@@ -85,7 +87,7 @@ namespace TradeSoft.Engine.Management
             string msg = reason;
             System.Diagnostics.Debug.WriteLine($"❌ [REJET RISK] {msg}");
 
-            _logs.Add(new LogEntryDTO(time, "REJET RISK", msg));
+            _logs?.Add(new LogEntryDTO(time, "REJET RISK", msg));
         }
 
         private void ProcessNewOrders(TickContext context)
@@ -98,7 +100,10 @@ namespace TradeSoft.Engine.Management
 
                 if (IsExitOrder(order)) continue;
 
-                if (currentPositions >= _config.MaxConcurrentPositions)
+                bool hasOppositePosition = _portfolioManager.CurrentPortfolio.Positions
+                    .Any(p => p.Symbol == order.Symbol && p.Side != order.Side);
+
+                if (!hasOppositePosition && currentPositions >= _config.MaxConcurrentPositions)
                 {
                     LogRejection(new DateTime(context.Tick.Timestamp), $"Max Positions Atteint ({currentPositions}/{_config.MaxConcurrentPositions}) pour {order.Symbol}");
                     context.NewOrders.RemoveAt(i);
@@ -117,7 +122,7 @@ namespace TradeSoft.Engine.Management
                     LogRejection(new DateTime(context.Tick.Timestamp), $"Erreur Taille: {sizeReason}");
                     context.NewOrders.RemoveAt(i);
                 }
-                else
+                else if (!hasOppositePosition)
                 {
                     currentPositions++;
                 }
@@ -127,11 +132,39 @@ namespace TradeSoft.Engine.Management
         private bool CheckRiskRewardRatio(Order order, TickData tick, out string reason)
         {
             reason = string.Empty;
-            if (!order.StopLoss.HasValue || !order.TakeProfit.HasValue) return true;
 
             double entryPrice = (order.Type == OrderType.Limit)
                 ? order.Price
                 : (order.Side == Side.Buy ? tick.Ask : tick.Bid);
+
+            if (order.Side == Side.Buy)
+            {
+                if (order.StopLoss.HasValue && order.StopLoss.Value >= entryPrice)
+                {
+                    reason = "StopLoss invalide (>= prix d'entrée pour un achat)";
+                    return false;
+                }
+                if (order.TakeProfit.HasValue && order.TakeProfit.Value <= entryPrice)
+                {
+                    reason = "TakeProfit invalide (<= prix d'entrée pour un achat)";
+                    return false;
+                }
+            }
+            else
+            {
+                if (order.StopLoss.HasValue && order.StopLoss.Value <= entryPrice)
+                {
+                    reason = "StopLoss invalide (<= prix d'entrée pour une vente)";
+                    return false;
+                }
+                if (order.TakeProfit.HasValue && order.TakeProfit.Value >= entryPrice)
+                {
+                    reason = "TakeProfit invalide (>= prix d'entrée pour une vente)";
+                    return false;
+                }
+            }
+
+            if (!order.StopLoss.HasValue || !order.TakeProfit.HasValue) return true;
 
             double risk = Math.Abs(entryPrice - order.StopLoss.Value);
             double reward = Math.Abs(order.TakeProfit.Value - entryPrice);
@@ -143,7 +176,7 @@ namespace TradeSoft.Engine.Management
             }
 
             double ratio = reward / risk;
-            if (ratio < _config.MinRiskRewardRatio)
+            if (ratio + 1e-9 < _config.MinRiskRewardRatio)
             {
                 reason = $"Ratio {ratio:F2} < Min {_config.MinRiskRewardRatio} (Risk:{risk:F4}, Reward:{reward:F4})";
                 return false;
@@ -178,8 +211,8 @@ namespace TradeSoft.Engine.Management
             }
             else
             {
-                double defaultRisk = 0.01;
-                double defaultLev = 1.0;
+                double defaultRisk = _config.DefaultRiskNoSL;
+                double defaultLev = _config.DefaultLeverageNoSL;
 
                 quantityByRisk = (equity * defaultRisk * defaultLev) / currentPrice;
             }

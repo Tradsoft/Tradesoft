@@ -15,6 +15,9 @@ namespace TradeSoft.Infrastructure.Processing
 
         public BarAggregator(TimeSpan timeframe)
         {
+            if (timeframe <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(timeframe), "Timeframe must be > 0.");
+
             _timeframe = timeframe;
         }
 

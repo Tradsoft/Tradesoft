@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Threading;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.Pipeline;
@@ -7,7 +9,14 @@ namespace TradeSoft.Engine.Strategies
 {
     public class RandomStrategy : Handler
     {
-        private Random _rnd = new Random();
+        private static long _nextOrderId;
+        private readonly Random _rnd = new Random();
+        private readonly string _symbol;
+
+        public RandomStrategy(string symbol = "EURUSD")
+        {
+            _symbol = symbol;
+        }
 
         protected override void OnProcess(TickContext context)
         {
@@ -25,9 +34,9 @@ namespace TradeSoft.Engine.Strategies
 
                 var order = new Order
                 {
-                    Id = DateTime.Now.Ticks, 
+                    Id = Interlocked.Increment(ref _nextOrderId), 
                     Timestamp = context.Tick.Timestamp,
-                    Symbol = "EURUSD",
+                    Symbol = _symbol,
                     Side = Side.Buy,
 
                     Quantity = 1.0,
@@ -41,7 +50,7 @@ namespace TradeSoft.Engine.Strategies
 
                 context.NewOrders.Add(order);
 
-                Console.WriteLine($"[STRATEGY] Achat {bar.Timestamp:HH:mm} @ {bar.Close} | SL: {order.StopLoss:F5} TP: {order.TakeProfit:F5}");
+                Debug.WriteLine($"[STRATEGY] Achat {bar.Timestamp:HH:mm} @ {bar.Close:F5} | SL: {order.StopLoss:F5} TP: {order.TakeProfit:F5}");
             }
         }
     }

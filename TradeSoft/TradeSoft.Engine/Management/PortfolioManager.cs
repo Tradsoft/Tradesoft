@@ -27,6 +27,11 @@ namespace TradeSoft.Engine.Management
             EquityCurve.Add((DateTime.MinValue, initialCash));
         }
 
+        public void ProcessTick(TickContext context)
+        {
+            OnProcess(context);
+        }
+
         protected override void OnProcess(TickContext context)
         {
             CurrentPrice = context.Tick.MidPrice;

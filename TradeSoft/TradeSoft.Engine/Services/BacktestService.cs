@@ -21,7 +21,21 @@ namespace TradeSoft.Engine.Services
     public class BarCollector : Handler
     {
         public List<Bar> Bars { get; } = new List<Bar>();
-        protected override void OnProcess(TickContext ctx) { if (ctx.GeneratedBar != null) Bars.Add(new Bar { Open = ctx.GeneratedBar.Open, High = ctx.GeneratedBar.High, Low = ctx.GeneratedBar.Low, Close = ctx.GeneratedBar.Close, Timestamp = ctx.GeneratedBar.Timestamp }); }
+        protected override void OnProcess(TickContext ctx)
+        {
+            if (ctx.GeneratedBar != null)
+            {
+                Bars.Add(new Bar
+                {
+                    Open = ctx.GeneratedBar.Open,
+                    High = ctx.GeneratedBar.High,
+                    Low = ctx.GeneratedBar.Low,
+                    Close = ctx.GeneratedBar.Close,
+                    Volume = ctx.GeneratedBar.Volume,
+                    Timestamp = ctx.GeneratedBar.Timestamp
+                });
+            }
+        }
     }
     public class TradeCollector : Handler
     {
@@ -32,13 +46,28 @@ namespace TradeSoft.Engine.Services
     {
         private readonly List<LogEntryDTO> _logs;
         public OrderLogger(List<LogEntryDTO> logs) { _logs = logs; }
-        protected override void OnProcess(TickContext ctx) { if (ctx.NewOrders.Count > 0) foreach (var o in ctx.NewOrders) _logs.Add(new LogEntryDTO(new DateTime(ctx.Tick.Timestamp), "INTENTION", $"{o.Side} {o.Type} {o.Quantity:F2}")); }
+        protected override void OnProcess(TickContext ctx)
+        {
+            if (ctx.NewOrders.Count > 0)
+            {
+                var time = new DateTime(ctx.Tick.Timestamp);
+                foreach (var o in ctx.NewOrders)
+                    _logs.Add(new LogEntryDTO(time, "INTENTION", $"{o.Side} {o.Type} | Qty: {o.Quantity:F2}"));
+            }
+        }
     }
     public class ExecutionLogger : Handler
     {
         private readonly List<LogEntryDTO> _logs;
         public ExecutionLogger(List<LogEntryDTO> logs) { _logs = logs; }
-        protected override void OnProcess(TickContext ctx) { if (ctx.Trades.Count > 0) foreach (var t in ctx.Trades) _logs.Add(new LogEntryDTO(new DateTime(t.Timestamp), "EXECUTION", $"{t.Side} @ {t.Price:F5}")); }
+        protected override void OnProcess(TickContext ctx)
+        {
+            if (ctx.Trades.Count > 0)
+            {
+                foreach (var t in ctx.Trades)
+                    _logs.Add(new LogEntryDTO(new DateTime(t.Timestamp), "EXECUTION", $"{t.Side} | Prix: {t.Price:F5} | Qty: {t.Quantity:F2}"));
+            }
+        }
     }
 
     public class BacktestService : IBacktestService
@@ -57,6 +86,8 @@ namespace TradeSoft.Engine.Services
             IProgress<float>? progress = null,
             CancellationToken cancellationToken = default)
         {
+            ValidateConfig(config);
+
             return await Task.Run(() =>
             {
                 var capturedLogs = new List<LogEntryDTO>();
@@ -93,7 +124,7 @@ namespace TradeSoft.Engine.Services
                 result.Bars = barCollector.Bars;
                 result.Trades = tradeCollector.AllTrades.Select(t => new TradeResultItem
                 {
-                    Id = 0, 
+                    Id = t.OrderId,
                     Time = new DateTime(t.Timestamp),
                     Side = t.Side.ToString(),
                     Price = t.Price,
@@ -111,47 +142,89 @@ namespace TradeSoft.Engine.Services
             }, cancellationToken);
         }
 
+        private static void ValidateConfig(BacktestConfig config)
+        {
+            if (config is null)
+                throw new ArgumentNullException(nameof(config));
+
+            if (string.IsNullOrWhiteSpace(config.Symbol))
+                throw new ArgumentException("Symbol is required.", nameof(config.Symbol));
+
+            if (config.EndDate < config.StartDate)
+                throw new ArgumentException("EndDate must be greater than or equal to StartDate.", nameof(config.EndDate));
+
+            if (config.LotSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(config.LotSize), "LotSize must be > 0.");
+
+            if (config.MinLotSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(config.MinLotSize), "MinLotSize must be > 0.");
+
+            if (config.MinLotSize > config.LotSize)
+                throw new ArgumentException("MinLotSize must be <= LotSize.", nameof(config.MinLotSize));
+        }
+
         private Handler CreateStrategy(BacktestConfig config)
         {
-            double GetD(string key, double def) => config.StrategyParameters.ContainsKey(key) ? Convert.ToDouble(config.StrategyParameters[key]) : def;
-            int GetI(string key, int def) => config.StrategyParameters.ContainsKey(key) ? Convert.ToInt32(config.StrategyParameters[key]) : def;
+            double GetD(double def, params string[] keys)
+            {
+                foreach (var key in keys)
+                {
+                    if (config.StrategyParameters.TryGetValue(key, out var val) && val != null)
+                        return Convert.ToDouble(val);
+                }
+                return def;
+            }
+
+            int GetI(int def, params string[] keys)
+            {
+                foreach (var key in keys)
+                {
+                    if (config.StrategyParameters.TryGetValue(key, out var val) && val != null)
+                        return Convert.ToInt32(val);
+                }
+                return def;
+            }
 
             switch (config.Strategy)
             {
                 case StrategyType.RSI:
                     return new RSI(
-                        GetI("Period", 14),
-                        GetD("Oversold", 30),
-                        GetD("Overbought", 70),
-                        GetD("Lot", 1.0),
-                        GetD("SL Pips", 50),
-                        GetD("TP Pips", 100),
-                        config.TickSize 
+                        GetI(14, "Period"),
+                        GetD(30, "Oversold"),
+                        GetD(70, "Overbought"),
+                        GetD(1.0, "Lot"),
+                        GetD(50, "SL Pips", "SLPips"),
+                        GetD(100, "TP Pips", "TPPips"),
+                        GetD(config.TickSize, "Tick Size", "TickSize"),
+                        config.Symbol
                     );
 
                 case StrategyType.MAC:
                     return new MovingAverageCrossover(
-                        GetI("Short Period", 20),
-                        GetI("Long Period", 50),
-                        GetD("Lot", 1.0)
+                        GetI(20, "Short Period", "ShortPeriod"),
+                        GetI(50, "Long Period", "LongPeriod"),
+                        GetD(1.0, "Lot"),
+                        config.Symbol
                     );
 
                 case StrategyType.MeanReversion:
                     return new MeanReversion(
-                        GetI("Period", 20),
-                        GetD("K", 2.0),
-                        GetD("Lot", 1.0)
+                        GetI(20, "Period"),
+                        GetD(2.0, "K"),
+                        GetD(1.0, "Lot"),
+                        config.Symbol
                     );
 
                 case StrategyType.Breakout:
                     return new BreakoutSupportResistance(
-                        GetI("Lookback", 20),
-                        GetD("Lot", 1.0)
+                        GetI(20, "Lookback"),
+                        GetD(1.0, "Lot"),
+                        config.Symbol
                     );
 
                 case StrategyType.Random:
                 default:
-                    return new RandomStrategy();
+                    return new RandomStrategy(config.Symbol);
             }
         }
 

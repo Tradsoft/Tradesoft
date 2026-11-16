@@ -185,41 +185,50 @@
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0" BorderBrush="#2B2B2B" BorderThickness="0,0,0,1" Padding="15,0">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <ComboBox ItemsSource="{Binding AvailableTimeframes}" 
-                              DisplayMemberPath="Label"
-                              SelectedValuePath="Value"
-                              SelectedValue="{Binding SelectedTimeframe}"
-                              Width="70" Height="28" Margin="0,0,10,0"/>
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ComboBox ItemsSource="{Binding AvailableTimeframes}" 
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding SelectedTimeframe}"
+                                  Width="70" Height="28" Margin="0,0,10,0"/>
 
-                    <Grid VerticalAlignment="Center">
-                        <ComboBox x:Name="CbxIndicators"
-                                  ItemsSource="{Binding AvailableIndicators}" 
-                                  Width="160" Height="30" 
-                                  VerticalContentAlignment="Center"
-                                  Background="White"
-                                  DropDownClosed="CbxIndicators_DropDownClosed">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <CheckBox Content="{Binding Name}" 
-                                              IsChecked="{Binding IsSelected}" 
-                                              Foreground="Black"
-                                              FontSize="12"
-                                              VerticalAlignment="Center"
-                                              Margin="2"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                        <Grid VerticalAlignment="Center">
+                            <ComboBox x:Name="CbxIndicators"
+                                      ItemsSource="{Binding AvailableIndicators}" 
+                                      Width="160" Height="30" 
+                                      VerticalContentAlignment="Center"
+                                      Background="White"
+                                      DropDownClosed="CbxIndicators_DropDownClosed">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Name}" 
+                                                  IsChecked="{Binding IsSelected}" 
+                                                  Foreground="Black"
+                                                  FontSize="12"
+                                                  VerticalAlignment="Center"
+                                                  Margin="2"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
 
-                        <TextBlock Text="📈 Indicateurs ▾" 
-                                   VerticalAlignment="Center" 
-                                   HorizontalAlignment="Left" 
-                                   Margin="12,0,0,0" 
-                                   Foreground="#333333"
-                                   FontWeight="SemiBold"
-                                   IsHitTestVisible="False"/>
-                    </Grid>
-                </StackPanel>
+                            <TextBlock Text="📈 Indicateurs ▾" 
+                                       VerticalAlignment="Center" 
+                                       HorizontalAlignment="Left" 
+                                       Margin="12,0,0,0" 
+                                       Foreground="#333333"
+                                       FontWeight="SemiBold"
+                                       IsHitTestVisible="False"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding StatusText}"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               Foreground="#B2B5BE"
+                               FontSize="12"
+                               FontFamily="Consolas"/>
+                </Grid>
             </Border>
 
             <Grid Grid.Row="1">

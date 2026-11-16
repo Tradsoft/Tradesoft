@@ -19,6 +19,11 @@ namespace TradeSoft.Engine.Analysis
             result.NetProfit = result.FinalEquity - result.InitialCash;
             result.ReturnPercent = result.InitialCash > 0 ? (result.NetProfit / result.InitialCash) * 100 : 0;
             result.TotalTrades = history.Count;
+            result.MaxDrawdownPercent = CalculateMaxDrawdown(equityCurve);
+            result.EquityCurve = equityCurve != null
+                ? equityCurve.Select(x => new EquityPoint(x.Item1, x.Item2)).ToList()
+                : new List<EquityPoint>();
+            result.ClosedTrades = history.ToList();
 
             if (result.TotalTrades == 0) 
                 return result;
@@ -31,8 +36,6 @@ namespace TradeSoft.Engine.Analysis
 
             result.ProfitFactor = grossLoss == 0 ? (grossProfit > 0 ? 999 : 0) : grossProfit / grossLoss;
 
-            result.MaxDrawdownPercent = CalculateMaxDrawdown(equityCurve);
-
             result.Trades = history.Select(t => new TradeResultItem
             {
                 Id = 0,
@@ -42,8 +45,6 @@ namespace TradeSoft.Engine.Analysis
                 Quantity = t.Quantity,
                 PnL = t.PnL
             }).ToList();
-
-            result.EquityCurve = equityCurve.Select(x => new EquityPoint(x.Item1, x.Item2)).ToList();
 
             return result;
         }

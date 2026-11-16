@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Threading;
 using TradeSoft.Core.Context;
 using TradeSoft.Core.Domain;
 using TradeSoft.Core.Pipeline;
@@ -7,6 +9,7 @@ namespace TradeSoft.Engine.Strategies
 {
     public class RSI : Handler
     {
+        private static long _nextOrderId;
         private readonly int _period;
         private readonly double _oversold;
         private readonly double _overbought;
@@ -15,6 +18,7 @@ namespace TradeSoft.Engine.Strategies
         private readonly double _tpPips;
 
         private readonly double _tickSize;
+        private readonly string _symbol;
 
         private bool _hasPrevPrice;
         private double _prevPrice;
@@ -27,7 +31,7 @@ namespace TradeSoft.Engine.Strategies
         private double? _prevRsi;
         private int _currentDirection = 0;
 
-        public RSI(int period = 14, double oversold = 30, double overbought = 70, double lot = 1.0, double slPips = 50, double tpPips = 100, double tickSize = 0.01)
+        public RSI(int period = 14, double oversold = 30, double overbought = 70, double lot = 1.0, double slPips = 50, double tpPips = 100, double tickSize = 0.0001, string symbol = "EURUSD")
         {
             if (period <= 1) throw new ArgumentOutOfRangeException(nameof(period));
             _period = period;
@@ -37,6 +41,7 @@ namespace TradeSoft.Engine.Strategies
             _slPips = slPips;
             _tpPips = tpPips;
             _tickSize = tickSize;
+            _symbol = symbol;
         }
 
         protected override void OnProcess(TickContext context)
@@ -107,9 +112,9 @@ namespace TradeSoft.Engine.Strategies
 
             context.NewOrders.Add(new Order
             {
-                Id = DateTime.UtcNow.Ticks,
+                Id = Interlocked.Increment(ref _nextOrderId),
                 Timestamp = timestamp,
-                Symbol = "EURUSD",
+                Symbol = _symbol,
                 Side = side,
                 Quantity = _lot,
                 Type = OrderType.Market,
@@ -119,7 +124,7 @@ namespace TradeSoft.Engine.Strategies
                 Comment = $"RSI_{rsi:F1}"
             });
 
-            Console.WriteLine($"[RSI] {side} | Price={price:F5} | RSI={rsi:F1} | SL={slPrice:F5} TP={tpPrice:F5}");
+            Debug.WriteLine($"[RSI] {side} | Price={price:F5} | RSI={rsi:F1} | SL={slPrice:F5} TP={tpPrice:F5}");
         }
 
         private static double ComputeRsi(double avgGain, double avgLoss)
